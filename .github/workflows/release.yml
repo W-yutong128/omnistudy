@@ -61,7 +61,7 @@ jobs:
         run: ./scripts/package-extension
 
       - name: Install Chromium and run extension tests
-        run: pnpm exec playwright install --with-deps chromium
+        run: pnpm --filter @omnistudy/extension exec playwright install --with-deps chromium
       - run: xvfb-run pnpm --filter @omnistudy/extension test:e2e
 
       - name: Record UI walkthrough

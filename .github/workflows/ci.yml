@@ -33,6 +33,6 @@ jobs:
           node-version: "20"
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm --filter @omnistudy/extension exec playwright install --with-deps chromium
       - run: xvfb-run ./scripts/verify
       - run: ./scripts/audit-release
