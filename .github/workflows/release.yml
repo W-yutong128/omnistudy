@@ -1,0 +1,90 @@
+name: release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: omnistudy
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: mvn test
+        working-directory: packages/backend
+      - run: ./scripts/run-agent-evals
+      - run: python3 -m unittest -v test_idea_bridge.py
+        working-directory: native-host
+
+      - name: Verify release version
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          expected="v$(node -p "require('./packages/extension/package.json').version")"
+          test "$GITHUB_REF_NAME" = "$expected" || {
+            echo "Tag $GITHUB_REF_NAME does not match extension version $expected" >&2
+            exit 1
+          }
+
+      - name: Package local Chrome extension
+        env:
+          VITE_API_BASE_URL: http://localhost:8082
+        run: ./scripts/package-extension
+
+      - name: Install Chromium and run extension tests
+        run: pnpm exec playwright install --with-deps chromium
+      - run: xvfb-run pnpm --filter @omnistudy/extension test:e2e
+
+      - name: Record UI walkthrough
+        run: xvfb-run ./scripts/record-demo
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: omnistudy-chrome-extension
+          path: |
+            artifacts/omnistudy-extension-*.zip
+            artifacts/demo/omnistudy-ui-demo.webm
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" artifacts/omnistudy-extension-*.zip artifacts/demo/omnistudy-ui-demo.webm --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" artifacts/omnistudy-extension-*.zip artifacts/demo/omnistudy-ui-demo.webm --generate-notes --verify-tag
+          fi

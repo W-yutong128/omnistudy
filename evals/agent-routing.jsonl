@@ -1,0 +1,13 @@
+{"input":"解释一下当前内容","expectedTool":"explain_current"}
+{"input":"这段话是什么意思","expectedTool":"explain_current"}
+{"input":"我没有听懂老师刚才讲的内容","expectedTool":"explain_current"}
+{"input":"根据当前内容出一道练习题","expectedTool":"create_practice"}
+{"input":"测试我是否理解了进程调度","expectedTool":"create_practice"}
+{"input":"在我的笔记里搜索虚拟内存","expectedTool":"search_learning_memory"}
+{"input":"查找以前学过的 TCP 内容","expectedTool":"search_learning_memory"}
+{"input":"帮我回到老师讲 Planning 的位置","expectedTool":"seek_video"}
+{"input":"定位一下死锁是哪里讲的","expectedTool":"seek_video"}
+{"input":"我今天应该复习什么","expectedTool":"get_review_plan"}
+{"input":"列出我的薄弱知识点","expectedTool":"get_review_plan"}
+{"input":"你好，今天继续学习","expectedTool":"respond"}
+{"input":"打开 IDEA，我想自己写这道代码题","expectedTool":"request_open_idea"}

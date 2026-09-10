@@ -1,0 +1,4 @@
+interface:
+  display_name: "Coding Course Coach"
+  short_description: "Guide coding practice without replacing the learner"
+  default_prompt: "Use $coding-course-coach to help me practice this coding concept."

@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_dir="$(cd "$(dirname "$0")/.." && pwd)"
+extension_dir="$repo_dir/packages/extension"
+artifact_dir="$repo_dir/artifacts"
+api_base_url="${VITE_API_BASE_URL:-http://localhost:8082}"
+
+command -v pnpm >/dev/null 2>&1 || {
+  echo "pnpm 9+ is required to build the extension." >&2
+  exit 1
+}
+command -v zip >/dev/null 2>&1 || {
+  echo "The zip command is required." >&2
+  exit 1
+}
+
+if [[ ! -d "$repo_dir/node_modules" ]]; then
+  (cd "$repo_dir" && pnpm install --frozen-lockfile)
+fi
+
+version="$(node -p "require('$extension_dir/package.json').version")"
+archive="$artifact_dir/omnistudy-extension-v${version}.zip"
+mkdir -p "$artifact_dir"
+
+(cd "$repo_dir" && VITE_API_BASE_URL="$api_base_url" pnpm --filter @omnistudy/extension build)
+[[ -f "$extension_dir/dist/manifest.json" ]] || {
+  echo "Extension build did not produce dist/manifest.json" >&2
+  exit 1
+}
+[[ -f "$extension_dir/dist/src/serviceworker.js" ]] || {
+  echo "Extension build did not produce the service worker" >&2
+  exit 1
+}
+
+rm -f "$archive"
+(cd "$extension_dir/dist" && zip -qr "$archive" .)
+echo "Created $archive"
+echo "Configured backend: $api_base_url"

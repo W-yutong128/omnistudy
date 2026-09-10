@@ -1,0 +1,12 @@
+- op: replace
+  path: /spec/type
+  value: LoadBalancer
+- op: replace
+  path: /spec/ports
+  value:
+    - name: http
+      port: 8083
+      targetPort: http
+    - name: management
+      port: 9191
+      targetPort: management

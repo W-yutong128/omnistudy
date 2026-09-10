@@ -1,0 +1,116 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: omnistudy-worker
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: omnistudy-worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: omnistudy-worker
+        app.kubernetes.io/component: worker
+    spec:
+      serviceAccountName: omnistudy-backend
+      terminationGracePeriodSeconds: 60
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: omnistudy-worker
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: worker
+          image: ghcr.io/your-org/omnistudy-backend:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: management
+              containerPort: 9091
+          envFrom:
+            - configMapRef:
+                name: omnistudy-config
+            - secretRef:
+                name: omnistudy-secrets
+          env:
+            - name: APP_RUNTIME_ROLE
+              value: worker
+            - name: SERVER_PORT
+              value: "8081"
+            - name: AI_JOBS_ENABLED
+              value: "true"
+            - name: MAINTENANCE_ENABLED
+              value: "true"
+            - name: QUESTION_BANK_SEED_ENABLED
+              value: "false"
+            - name: AGENTSCOPE_ENABLED
+              value: "false"
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: management
+            failureThreshold: 36
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: management
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: management
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 500m
+              memory: 768Mi
+            limits:
+              cpu: "2"
+              memory: 1536Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: agent-workspace
+              mountPath: /tmp/omnistudy-agentscope
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: agent-workspace
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: omnistudy-worker
+  labels:
+    app.kubernetes.io/name: omnistudy-worker
+spec:
+  selector:
+    app.kubernetes.io/name: omnistudy-worker
+  ports:
+    - name: management
+      port: 9091
+      targetPort: management

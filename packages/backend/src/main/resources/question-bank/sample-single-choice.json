@@ -1,0 +1,102 @@
+[
+  {
+    "sourceType": "project_sample",
+    "sourceDocument": "omnistudy-samples-v1",
+    "sourceYear": null,
+    "sourceExam": "OmniStudy 原创示例题",
+    "sourceQuestionNo": 1,
+    "sourcePage": null,
+    "subject": "数据结构",
+    "questionType": "single_choice",
+    "questionText": "一个任务处理器必须严格按照任务到达的先后顺序执行。最适合保存待处理任务的数据结构是什么？",
+    "options": [
+      {"id": "A", "text": "栈"},
+      {"id": "B", "text": "队列"},
+      {"id": "C", "text": "集合"},
+      {"id": "D", "text": "二叉搜索树"}
+    ],
+    "correctOptionId": "B",
+    "explanation": "队列遵循先进先出规则，可以保持任务的到达顺序。",
+    "knowledgeTags": ["队列", "先进先出"],
+    "assetPaths": [],
+    "difficulty": 1,
+    "rawText": "按照任务到达顺序处理时应选择哪种数据结构？",
+    "licenseStatus": "project_original",
+    "reviewStatus": "ready"
+  },
+  {
+    "sourceType": "project_sample",
+    "sourceDocument": "omnistudy-samples-v1",
+    "sourceYear": null,
+    "sourceExam": "OmniStudy 原创示例题",
+    "sourceQuestionNo": 2,
+    "sourcePage": null,
+    "subject": "操作系统",
+    "questionType": "single_choice",
+    "questionText": "某进程访问的虚拟页当前不在物理内存中。处理器继续执行该访问前，通常首先触发什么？",
+    "options": [
+      {"id": "A", "text": "缺页异常"},
+      {"id": "B", "text": "时钟中断"},
+      {"id": "C", "text": "进程正常退出"},
+      {"id": "D", "text": "文件重命名"}
+    ],
+    "correctOptionId": "A",
+    "explanation": "页表项表明页面不在内存时，处理器产生缺页异常，由操作系统调入所需页面。",
+    "knowledgeTags": ["虚拟内存", "缺页异常"],
+    "assetPaths": [],
+    "difficulty": 2,
+    "rawText": "访问不在物理内存中的虚拟页会触发什么？",
+    "licenseStatus": "project_original",
+    "reviewStatus": "ready"
+  },
+  {
+    "sourceType": "project_sample",
+    "sourceDocument": "omnistudy-samples-v1",
+    "sourceYear": null,
+    "sourceExam": "OmniStudy 原创示例题",
+    "sourceQuestionNo": 3,
+    "sourcePage": null,
+    "subject": "计算机网络",
+    "questionType": "single_choice",
+    "questionText": "一个实时语音应用更重视低等待时间，并能容忍少量数据丢失。它通常优先选择哪种传输层协议？",
+    "options": [
+      {"id": "A", "text": "TCP"},
+      {"id": "B", "text": "UDP"},
+      {"id": "C", "text": "HTTP"},
+      {"id": "D", "text": "ARP"}
+    ],
+    "correctOptionId": "B",
+    "explanation": "UDP 不建立可靠字节流，协议开销和等待通常更低，应用可以自行处理可接受的丢包。",
+    "knowledgeTags": ["UDP", "传输层"],
+    "assetPaths": [],
+    "difficulty": 1,
+    "rawText": "低延迟且可容忍少量丢包的应用通常选择什么协议？",
+    "licenseStatus": "project_original",
+    "reviewStatus": "ready"
+  },
+  {
+    "sourceType": "project_sample",
+    "sourceDocument": "omnistudy-samples-v1",
+    "sourceYear": null,
+    "sourceExam": "OmniStudy 原创示例题",
+    "sourceQuestionNo": 4,
+    "sourcePage": null,
+    "subject": "计算机组成原理",
+    "questionType": "single_choice",
+    "questionText": "程序刚读取数组中的一个元素，随后立即读取相邻元素时更可能命中缓存。这主要利用了哪种局部性？",
+    "options": [
+      {"id": "A", "text": "空间局部性"},
+      {"id": "B", "text": "时间局部性"},
+      {"id": "C", "text": "控制相关性"},
+      {"id": "D", "text": "写后读相关性"}
+    ],
+    "correctOptionId": "A",
+    "explanation": "访问相邻地址体现空间局部性，缓存行通常会把附近的数据一并载入。",
+    "knowledgeTags": ["Cache", "空间局部性"],
+    "assetPaths": [],
+    "difficulty": 1,
+    "rawText": "连续访问数组相邻元素体现哪种局部性？",
+    "licenseStatus": "project_original",
+    "reviewStatus": "ready"
+  }
+]

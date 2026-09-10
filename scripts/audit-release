@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_dir="$(cd "$(dirname "$0")/.." && pwd)"
+audit_dir="$(mktemp -d "${TMPDIR:-/tmp}/omnistudy-release-audit.XXXXXX")"
+trap 'rm -rf "$audit_dir"' EXIT
+
+git --git-dir="$audit_dir/repository" --work-tree="$repo_dir" init -q
+git --git-dir="$audit_dir/repository" --work-tree="$repo_dir" add --all
+
+blocked='(^|/)(\.env\.local|backups|artifacts|node_modules|target|dist|tmp|\.idea|\.agentscope)(/|$)'
+if git --git-dir="$audit_dir/repository" --work-tree="$repo_dir" diff --cached --name-only | grep -E "$blocked"; then
+  echo "Release audit failed: ignored runtime/generated files entered the candidate commit." >&2
+  exit 1
+fi
+
+patterns='wuyutong|/Users/[^/]+/(Downloads|Desktop|Documents)/|BEGIN ([A-Z ]+ )?PRIVATE KEY|sk-[A-Za-z0-9_-]{20,}'
+if git --git-dir="$audit_dir/repository" --work-tree="$repo_dir" grep --cached -n -I -E "$patterns" -- . ':(exclude)scripts/audit-release'; then
+  echo "Release audit failed: possible personal path, private key, or API key found." >&2
+  exit 1
+fi
+
+for required in README.md SECURITY.md PRIVACY.md CONTRIBUTING.md; do
+  git --git-dir="$audit_dir/repository" --work-tree="$repo_dir" cat-file -e ":$required" || {
+    echo "Release audit failed: missing $required" >&2
+    exit 1
+  }
+done
+
+if ! git --git-dir="$audit_dir/repository" --work-tree="$repo_dir" cat-file -e :LICENSE 2>/dev/null; then
+  echo "Release audit incomplete: LICENSE has not been selected yet." >&2
+  exit 2
+fi
+
+count="$(git --git-dir="$audit_dir/repository" --work-tree="$repo_dir" diff --cached --name-only | wc -l | tr -d ' ')"
+echo "Release audit passed for $count candidate files."

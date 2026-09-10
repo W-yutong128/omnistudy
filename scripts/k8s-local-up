@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_dir="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$repo_dir"
+
+if [[ "$(kubectl config current-context 2>/dev/null || true)" != "docker-desktop" ]]; then
+  echo "Docker Desktop Kubernetes 未就绪，请先确认 kubectl context 为 docker-desktop。" >&2
+  exit 1
+fi
+
+docker compose build backend-api
+docker compose up -d postgres redis backend-api backend-worker prometheus grafana
+
+kubectl create namespace omnistudy --dry-run=client -o yaml | kubectl apply -f -
+
+get_api_env() {
+  docker inspect omnistudy-backend-api-1 --format '{{range .Config.Env}}{{println .}}{{end}}' \
+    | awk -F= -v wanted="$1" '$1 == wanted {sub(/^[^=]*=/, ""); print; exit}'
+}
+
+local_db_password="$(get_api_env DB_PASSWORD)"
+local_redis_password="$(get_api_env REDIS_PASSWORD)"
+local_jwt_secret="$(get_api_env JWT_SECRET)"
+local_credential_key="$(get_api_env AI_CREDENTIAL_ENCRYPTION_KEY)"
+trap 'unset local_db_password local_redis_password local_jwt_secret local_credential_key' EXIT
+
+if [[ -z "$local_db_password" || -z "$local_redis_password" || -z "$local_jwt_secret" || -z "$local_credential_key" ]]; then
+  echo "Compose 运行环境缺少 DB、Redis、JWT 或 AI 凭证加密密钥。" >&2
+  exit 1
+fi
+
+kubectl -n omnistudy create secret generic omnistudy-secrets \
+  --from-literal=DB_URL='jdbc:postgresql://host.docker.internal:5433/omnistudy' \
+  --from-literal=DB_PASSWORD="$local_db_password" \
+  --from-literal=REDIS_HOST='host.docker.internal' \
+  --from-literal=REDIS_PASSWORD="$local_redis_password" \
+  --from-literal=JWT_SECRET="$local_jwt_secret" \
+  --from-literal=AI_CREDENTIAL_ENCRYPTION_KEY="$local_credential_key" \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+kubectl apply -k deploy/k8s/overlays/local
+kubectl -n omnistudy rollout restart deployment/omnistudy-api deployment/omnistudy-worker
+
+if ! kubectl -n kube-system get deployment metrics-server >/dev/null 2>&1; then
+  kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+fi
+
+metrics_image="$(kubectl -n kube-system get deployment metrics-server -o jsonpath='{.spec.template.spec.containers[0].image}')"
+docker pull "$metrics_image"
+
+metrics_args="$(kubectl -n kube-system get deployment metrics-server -o jsonpath='{.spec.template.spec.containers[0].args}')"
+if [[ "$metrics_args" != *--kubelet-insecure-tls* ]]; then
+  kubectl -n kube-system patch deployment metrics-server --type=json \
+    -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]'
+fi
+
+kubectl -n kube-system rollout status deployment/metrics-server --timeout=180s
+kubectl -n omnistudy rollout status deployment/omnistudy-api --timeout=180s
+kubectl -n omnistudy rollout status deployment/omnistudy-worker --timeout=180s
+
+docker compose restart prometheus grafana
+
+echo
+echo "OmniStudy 本地 Kubernetes 已就绪："
+echo "  API:     http://localhost:8083/health"
+echo "  Grafana: http://localhost:3000/d/omnistudy-overview"
+kubectl -n omnistudy get pods,hpa,pdb

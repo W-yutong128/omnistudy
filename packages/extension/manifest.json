@@ -1,0 +1,47 @@
+{
+  "manifest_version": 3,
+  "name": "OmniStudy",
+  "version": "0.1.0",
+  "description": "苏格拉底式网课学习伴侣 - 在 B 站等平台实时拦截 + 提问 + 笔记",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "action": {
+    "default_title": "OmniStudy",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting",
+    "tabs",
+    "sidePanel",
+    "nativeMessaging"
+  ],
+  "host_permissions": [
+    "https://www.bilibili.com/*",
+    "http://localhost:8080/*"
+  ],
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "background": {
+    "service_worker": "src/serviceworker.ts",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.bilibili.com/video/*"],
+      "js": ["src/content-script/index.ts"],
+      "run_at": "document_idle"
+    }
+  ]
+}

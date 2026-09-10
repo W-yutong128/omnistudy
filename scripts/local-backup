@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_dir="$(cd "$(dirname "$0")/.." && pwd)"
+env_file="$repo_dir/.env.local"
+timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+output="${1:-$repo_dir/backups/omnistudy-backup-$timestamp.tar.gz}"
+
+[[ -f "$env_file" ]] || {
+  echo "Missing .env.local. Start OmniStudy once before creating a backup." >&2
+  exit 1
+}
+[[ ! -e "$output" ]] || {
+  echo "Refusing to overwrite existing backup: $output" >&2
+  exit 1
+}
+
+mkdir -p "$(dirname "$output")"
+work_dir="$(mktemp -d "${TMPDIR:-/tmp}/omnistudy-backup.XXXXXX")"
+trap 'rm -rf "$work_dir"' EXIT
+chmod 700 "$work_dir"
+
+compose=(docker compose --env-file "$env_file")
+(cd "$repo_dir" && "${compose[@]}" exec -T postgres \
+  pg_dump -U omnistudy -d omnistudy --format=custom --no-owner --no-privileges) \
+  > "$work_dir/database.dump"
+cp "$env_file" "$work_dir/runtime.env"
+chmod 600 "$work_dir/runtime.env"
+printf 'format=omnistudy-local-backup-v1\ncreated_at=%s\n' "$timestamp" > "$work_dir/metadata.txt"
+
+tar -czf "$output" -C "$work_dir" database.dump runtime.env metadata.txt
+chmod 600 "$output"
+echo "Backup created: $output"
+echo "It contains the database and encryption keys. Store it like a password."

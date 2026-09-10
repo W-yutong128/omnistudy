@@ -1,0 +1,70 @@
+groups:
+  - name: omnistudy.availability
+    rules:
+      - alert: OmniStudyInstanceDown
+        expr: up{job=~"omnistudy-(api|worker|k8s-api|k8s-worker)"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "OmniStudy {{ $labels.job }} 实例不可用"
+          description: "Prometheus 已连续 1 分钟无法抓取 {{ $labels.instance }}。"
+
+      - alert: OmniStudyApiHighErrorRate
+        expr: |
+          (
+            sum(rate(http_server_requests_seconds_count{job="omnistudy-api",status=~"5.."}[5m]))
+            /
+            clamp_min(sum(rate(http_server_requests_seconds_count{job="omnistudy-api"}[5m])), 0.001)
+          ) > 0.05
+          and sum(rate(http_server_requests_seconds_count{job="omnistudy-api"}[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OmniStudy API 5xx 比例超过 5%"
+          description: "API 在有持续流量时连续 5 分钟出现较高服务端错误比例。"
+
+      - alert: OmniStudyApiHighLatency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(http_server_requests_seconds_bucket{job="omnistudy-api",uri!~"/actuator.*"}[5m]))
+          ) > 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OmniStudy API P95 延迟超过 3 秒"
+          description: "API P95 延迟已连续 5 分钟超过阈值。"
+
+  - name: omnistudy.ai-worker
+    rules:
+      - alert: OmniStudyAiQueueBacklog
+        expr: omnistudy_ai_jobs_queue{job="omnistudy-worker",status="pending"} > 20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "AI 任务积压超过 20 个"
+          description: "持久化 AI 队列连续 5 分钟存在明显积压。"
+
+      - alert: OmniStudyAiJobsFailed
+        expr: omnistudy_ai_jobs_queue{job="omnistudy-worker",status="failed"} > 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "存在终止失败的 AI 任务"
+          description: "请在数据库和 Worker 日志中检查失败任务及最后错误。"
+
+      - alert: OmniStudyAiWorkerStalled
+        expr: |
+          omnistudy_ai_jobs_queue{job="omnistudy-worker",status="pending"} > 0
+          and (time() - omnistudy_ai_jobs_last_success_epoch_seconds{job="omnistudy-worker"}) > 900
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "AI Worker 疑似停止消费"
+          description: "队列中存在任务，但已超过 15 分钟没有成功完成任务。"

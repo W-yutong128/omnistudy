@@ -1,0 +1,19 @@
+{
+  "name": "omnistudy",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "build": "pnpm -r build",
+    "package:extension": "./scripts/package-extension",
+    "demo:record": "./scripts/record-demo",
+    "test:e2e": "pnpm --filter @omnistudy/extension test:e2e",
+    "clean": "pnpm -r exec rm -rf dist"
+  },
+  "packageManager": "pnpm@9.0.0",
+  "devDependencies": {
+    "@types/chrome": "^0.0.268",
+    "typescript": "^5.4.0"
+  }
+}

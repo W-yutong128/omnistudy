@@ -1,0 +1,49 @@
+# Node
+node_modules/
+.pnpm-store/
+dist/
+build/
+tmp/
+*.log
+.DS_Store
+
+# Java
+target/
+*.class
+*.jar
+*.war
+*.iml
+.idea/
+.vscode/
+.classpath
+.project
+.settings/
+HELP.md
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# 环境
+.env
+.env.local
+.env.local.before-restore-*
+*.local
+deploy/k8s/secret.yaml
+
+# 数据库
+*.db
+*.sqlite
+
+# Chrome Extension
+packages/extension/dist/
+packages/extension/.crx/
+packages/extension/test-results/
+packages/extension/playwright-report/
+artifacts/
+backups/
+native-host/idea_bridge.config.json
+.agentscope/
+
+# OS
+Thumbs.db
+.DS_Store

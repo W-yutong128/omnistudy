@@ -1,0 +1,4 @@
+interface:
+  display_name: "Review Coach"
+  short_description: "Plan evidence-based review from learning history"
+  default_prompt: "Use $review-coach to plan my next focused review."

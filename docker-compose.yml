@@ -1,0 +1,147 @@
+x-backend-environment: &backend-environment
+  SPRING_PROFILES_ACTIVE: prod
+  DB_URL: jdbc:postgresql://postgres:5432/omnistudy
+  DB_USERNAME: omnistudy
+  DB_PASSWORD: ${DB_PASSWORD:-omnistudy}
+  REDIS_ENABLED: "true"
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  REDIS_PASSWORD: ${REDIS_PASSWORD:-omnistudy}
+  JWT_SECRET: ${JWT_SECRET:-omnistudy-compose-development-secret-change-me-now}
+  AI_CREDENTIAL_ENCRYPTION_KEY: ${AI_CREDENTIAL_ENCRYPTION_KEY:-omnistudy-compose-credential-key-change-me-now}
+  CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-chrome-extension://*}
+  MANAGEMENT_SERVER_PORT: "9091"
+  SERVER_FORWARD_HEADERS_STRATEGY: NONE
+  AGENTSCOPE_WORKSPACE: /tmp/omnistudy-agentscope
+  AGENTSCOPE_SKILLS_DIRECTORY: /app/skills
+  DEFAULT_USER_ENABLED: "false"
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: omnistudy
+      POSTGRES_USER: omnistudy
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-omnistudy}
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - omnistudy-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U omnistudy -d omnistudy"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-omnistudy}"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - omnistudy-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-omnistudy}", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  backend-api:
+    image: omnistudy-backend:local
+    build:
+      context: .
+      dockerfile: packages/backend/Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *backend-environment
+      APP_RUNTIME_ROLE: api
+      AI_JOBS_ENABLED: "false"
+      MAINTENANCE_ENABLED: "false"
+      QUESTION_BANK_SEED_ENABLED: "true"
+      AGENTSCOPE_ENABLED: ${AGENTSCOPE_ENABLED:-true}
+      BOOTSTRAP_ADMIN_USERNAME: ${BOOTSTRAP_ADMIN_USERNAME:-}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-}
+    ports:
+      - "${API_PORT:-8082}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:9091/actuator/health/readiness"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
+
+  backend-worker:
+    image: omnistudy-backend:local
+    restart: unless-stopped
+    environment:
+      <<: *backend-environment
+      APP_RUNTIME_ROLE: worker
+      SERVER_PORT: "8081"
+      AI_JOBS_ENABLED: "true"
+      MAINTENANCE_ENABLED: "true"
+      QUESTION_BANK_SEED_ENABLED: "false"
+      AGENTSCOPE_ENABLED: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:9091/actuator/health/readiness"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
+
+  prometheus:
+    image: quay.io/prometheus/prometheus:v3.14.0
+    profiles: ["monitoring"]
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+      - --web.enable-lifecycle
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/rules:/etc/prometheus/rules:ro
+      - omnistudy-prometheus:/prometheus
+    depends_on:
+      backend-api:
+        condition: service_healthy
+      backend-worker:
+        condition: service_healthy
+
+  grafana:
+    image: grafana/grafana:13.2.1
+    profiles: ["monitoring"]
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-omnistudy-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - omnistudy-grafana:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+
+volumes:
+  omnistudy-postgres:
+  omnistudy-redis:
+  omnistudy-prometheus:
+  omnistudy-grafana:

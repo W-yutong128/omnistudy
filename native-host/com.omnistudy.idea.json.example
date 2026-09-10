@@ -1,0 +1,9 @@
+{
+  "name": "com.omnistudy.idea",
+  "description": "Permission-gated OmniStudy to IntelliJ IDEA bridge",
+  "path": "/absolute/path/to/omnistudy/native-host/idea_bridge.py",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://YOUR_EXTENSION_ID/"
+  ]
+}

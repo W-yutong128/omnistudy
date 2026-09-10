@@ -1,0 +1,137 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_dir="$(cd "$(dirname "$0")/.." && pwd)"
+env_file="$repo_dir/.env.local"
+with_monitoring=0
+
+usage() {
+  printf '%s\n' "Usage: ./scripts/local-up [--monitoring]" \
+    "  --monitoring  Also start Prometheus and Grafana"
+}
+
+for arg in "$@"; do
+  case "$arg" in
+    --monitoring) with_monitoring=1 ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "Unknown option: $arg" >&2; usage >&2; exit 1 ;;
+  esac
+done
+
+command -v docker >/dev/null 2>&1 || {
+  echo "Docker is not installed. Install and start Docker Desktop first." >&2
+  exit 1
+}
+docker compose version >/dev/null 2>&1 || {
+  echo "Docker Compose v2 is required." >&2
+  exit 1
+}
+docker info >/dev/null 2>&1 || {
+  echo "Docker is installed but the Docker engine is not running." >&2
+  exit 1
+}
+
+random_hex() {
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -hex 32
+  else
+    od -An -N32 -tx1 /dev/urandom | tr -d ' \n'
+  fi
+}
+
+container_env() {
+  local container_id="$1"
+  local name="$2"
+  docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$container_id" 2>/dev/null \
+    | sed -n "s/^${name}=//p" | head -n 1
+}
+
+if [[ ! -f "$env_file" ]]; then
+  umask 077
+  existing_backend_id="$(cd "$repo_dir" && docker compose ps -aq backend-api 2>/dev/null || true)"
+  existing_postgres_id="$(cd "$repo_dir" && docker compose ps -aq postgres 2>/dev/null || true)"
+  existing_redis_id="$(cd "$repo_dir" && docker compose ps -aq redis 2>/dev/null || true)"
+  existing_grafana_id="$(cd "$repo_dir" && docker compose ps -aq grafana 2>/dev/null || true)"
+
+  db_password="$(random_hex)"
+  redis_password="$(random_hex)"
+  jwt_secret="$(random_hex)"
+  encryption_key="$(random_hex)"
+  grafana_password="$(random_hex | cut -c1-24)"
+
+  # Upgrade path for installations created before .env.local existed. Reusing the
+  # old encryption key is required to keep previously stored BYOK credentials readable.
+  if [[ -n "$existing_postgres_id" ]]; then
+    db_password="$(container_env "$existing_postgres_id" POSTGRES_PASSWORD)"
+  fi
+  if [[ -n "$existing_redis_id" ]]; then
+    redis_password="$(docker inspect --format '{{index .Config.Cmd 4}}' "$existing_redis_id" 2>/dev/null || true)"
+  fi
+  if [[ -n "$existing_backend_id" ]]; then
+    jwt_secret="$(container_env "$existing_backend_id" JWT_SECRET)"
+    encryption_key="$(container_env "$existing_backend_id" AI_CREDENTIAL_ENCRYPTION_KEY)"
+  fi
+  if [[ -n "$existing_grafana_id" ]]; then
+    grafana_password="$(container_env "$existing_grafana_id" GF_SECURITY_ADMIN_PASSWORD)"
+  fi
+
+  db_password="${db_password:-omnistudy}"
+  redis_password="${redis_password:-omnistudy}"
+  jwt_secret="${jwt_secret:-omnistudy-compose-development-secret-change-me-now}"
+  encryption_key="${encryption_key:-omnistudy-compose-credential-key-change-me-now}"
+  grafana_password="${grafana_password:-omnistudy-admin}"
+  printf '%s\n' \
+    "DB_PASSWORD=$db_password" \
+    "REDIS_PASSWORD=$redis_password" \
+    "JWT_SECRET=$jwt_secret" \
+    "AI_CREDENTIAL_ENCRYPTION_KEY=$encryption_key" \
+    "GRAFANA_ADMIN_USER=admin" \
+    "GRAFANA_ADMIN_PASSWORD=$grafana_password" \
+    "API_PORT=8082" \
+    "POSTGRES_PORT=5433" \
+    "REDIS_PORT=6379" \
+    "PROMETHEUS_PORT=9090" \
+    "GRAFANA_PORT=3000" \
+    "CORS_ALLOWED_ORIGINS=chrome-extension://*" > "$env_file"
+  chmod 600 "$env_file"
+  echo "Created private runtime configuration: .env.local"
+fi
+
+compose=(docker compose --env-file "$env_file")
+if (( with_monitoring )); then
+  compose+=(--profile monitoring)
+fi
+
+(cd "$repo_dir" && "${compose[@]}" up -d --build)
+
+deadline=$((SECONDS + 240))
+while (( SECONDS < deadline )); do
+  container_id="$(cd "$repo_dir" && "${compose[@]}" ps -q backend-api)"
+  if [[ -n "$container_id" ]]; then
+    status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container_id")"
+    if [[ "$status" == "healthy" ]]; then
+      echo
+      echo "OmniStudy is ready. Flyway has initialized or upgraded the database."
+      echo "API:        http://localhost:8082"
+      echo "Health:     http://localhost:8082/health"
+      if (( with_monitoring )); then
+        echo "Prometheus: http://localhost:9090"
+        echo "Grafana:    http://localhost:3000"
+        grafana_password="$(sed -n 's/^GRAFANA_ADMIN_PASSWORD=//p' "$env_file")"
+        echo "Grafana login: admin / $grafana_password"
+      fi
+      echo "Install the Chrome ZIP from the GitHub Release, or run ./scripts/package-extension."
+      exit 0
+    fi
+    if [[ "$status" == "unhealthy" || "$status" == "exited" ]]; then
+      echo "Backend became $status. Recent logs:" >&2
+      (cd "$repo_dir" && "${compose[@]}" logs --tail=120 backend-api) >&2
+      exit 1
+    fi
+  fi
+  sleep 2
+done
+
+echo "Timed out waiting for the backend. Recent logs:" >&2
+(cd "$repo_dir" && "${compose[@]}" logs --tail=120 backend-api) >&2
+exit 1

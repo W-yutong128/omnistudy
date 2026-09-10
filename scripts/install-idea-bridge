@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -ne 1 ]]; then
+  echo "Usage: $0 <chrome-extension-id>"
+  exit 1
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+HOST_DIR="$PROJECT_DIR/native-host"
+TARGET_DIR="$HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts"
+TARGET="$TARGET_DIR/com.omnistudy.idea.json"
+
+mkdir -p "$TARGET_DIR"
+sed -e "s|/absolute/path/to/omnistudy/native-host/idea_bridge.py|$HOST_DIR/idea_bridge.py|" \
+    -e "s|YOUR_EXTENSION_ID|$1|" \
+    "$HOST_DIR/com.omnistudy.idea.json.example" > "$TARGET"
+chmod +x "$HOST_DIR/idea_bridge.py"
+echo "Installed: $TARGET"
+echo "Next: copy idea_bridge.config.example.json to idea_bridge.config.json and set allowedRoots."

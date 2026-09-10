@@ -1,0 +1,4 @@
+interface:
+  display_name: "Current Course Tutor"
+  short_description: "Explain the current lesson with grounded citations"
+  default_prompt: "Use $current-course-tutor to explain what I am watching now."

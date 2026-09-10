@@ -1,0 +1,21 @@
+/* Content script 样式 - 注入到 B 站页面的浮动控件 */
+.os-floating-trigger {
+  position: fixed;
+  right: 24px;
+  bottom: 100px;
+  z-index: 9999;
+  background: #2563eb;
+  color: white;
+  border-radius: 999px;
+  padding: 12px 18px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  user-select: none;
+  transition: transform 0.2s;
+}
+
+.os-floating-trigger:hover {
+  transform: scale(1.05);
+}

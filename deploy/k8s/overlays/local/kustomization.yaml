@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: omnistudy
+resources:
+  - ../../base
+patches:
+  - path: local-api-patch.yaml
+  - path: local-worker-patch.yaml
+  - path: local-ingress-delete.yaml
+  - path: local-api-service-patch.yaml
+    target:
+      kind: Service
+      name: omnistudy-api
+  - path: local-worker-service-patch.yaml
+    target:
+      kind: Service
+      name: omnistudy-worker
+images:
+  - name: ghcr.io/your-org/omnistudy-backend
+    newName: omnistudy-backend
+    newTag: local

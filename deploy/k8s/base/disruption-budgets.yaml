@@ -1,0 +1,20 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: omnistudy-api
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: omnistudy-api
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: omnistudy-worker
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: omnistudy-worker
+

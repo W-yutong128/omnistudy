@@ -1,0 +1,16 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: omnistudy-api
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: prepare-agent-workspace
+          imagePullPolicy: Always
+      containers:
+        - name: api
+          imagePullPolicy: Always
+          env:
+            - name: QUESTION_BANK_SEED_ENABLED
+              value: "false"

@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_dir="$(cd "$(dirname "$0")/.." && pwd)"
+archive="${1:-}"
+confirmation="${2:-}"
+
+if [[ -z "$archive" || "$confirmation" != "--yes" ]]; then
+  echo "Usage: ./scripts/local-restore /path/to/backup.tar.gz --yes" >&2
+  echo "This replaces the current OmniStudy database and runtime secrets." >&2
+  exit 1
+fi
+[[ -f "$archive" ]] || { echo "Backup not found: $archive" >&2; exit 1; }
+
+while IFS= read -r entry; do
+  entry="${entry#./}"
+  case "$entry" in
+    database.dump|runtime.env|metadata.txt) ;;
+    *) echo "Unsafe or unsupported backup entry: $entry" >&2; exit 1 ;;
+  esac
+done < <(tar -tzf "$archive")
+
+work_dir="$(mktemp -d "${TMPDIR:-/tmp}/omnistudy-restore.XXXXXX")"
+trap 'rm -rf "$work_dir"' EXIT
+chmod 700 "$work_dir"
+tar -xzf "$archive" -C "$work_dir"
+
+[[ -s "$work_dir/database.dump" && -s "$work_dir/runtime.env" ]] || {
+  echo "Invalid OmniStudy backup." >&2
+  exit 1
+}
+[[ ! -L "$work_dir/database.dump" && ! -L "$work_dir/runtime.env" && ! -L "$work_dir/metadata.txt" ]] || {
+  echo "Backup entries must be regular files, not symbolic links." >&2
+  exit 1
+}
+grep -q '^format=omnistudy-local-backup-v1$' "$work_dir/metadata.txt" || {
+  echo "Unsupported backup format." >&2
+  exit 1
+}
+
+if [[ -f "$repo_dir/.env.local" ]]; then
+  previous="$repo_dir/.env.local.before-restore-$(date -u +%Y%m%dT%H%M%SZ)"
+  cp "$repo_dir/.env.local" "$previous"
+  chmod 600 "$previous"
+  echo "Previous runtime configuration saved to: $previous"
+fi
+cp "$work_dir/runtime.env" "$repo_dir/.env.local"
+chmod 600 "$repo_dir/.env.local"
+
+compose=(docker compose --env-file "$repo_dir/.env.local")
+cd "$repo_dir"
+"${compose[@]}" stop backend-api backend-worker >/dev/null 2>&1 || true
+"${compose[@]}" up -d postgres redis
+
+deadline=$((SECONDS + 120))
+until container_id="$("${compose[@]}" ps -q postgres)" && \
+      [[ -n "$container_id" ]] && \
+      [[ "$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container_id")" == "healthy" ]]; do
+  if (( SECONDS >= deadline )); then
+    echo "Timed out waiting for PostgreSQL." >&2
+    exit 1
+  fi
+  sleep 2
+done
+
+"${compose[@]}" exec -T postgres pg_restore -U omnistudy -d omnistudy \
+  --clean --if-exists --no-owner --no-privileges < "$work_dir/database.dump"
+"${compose[@]}" up -d backend-api backend-worker
+echo "Restore completed. Run ./scripts/local-up to wait for the health check."

@@ -1,0 +1,136 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: omnistudy-api
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: omnistudy-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: omnistudy-api
+        app.kubernetes.io/component: api
+    spec:
+      serviceAccountName: omnistudy-backend
+      terminationGracePeriodSeconds: 45
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: omnistudy-api
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: prepare-agent-workspace
+          image: ghcr.io/your-org/omnistudy-backend:0.1.0
+          command: ["sh", "-c", "cp /app/AGENTS.md /workspace/AGENTS.md"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+          volumeMounts:
+            - name: agent-workspace
+              mountPath: /workspace
+      containers:
+        - name: api
+          image: ghcr.io/your-org/omnistudy-backend:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: management
+              containerPort: 9091
+          envFrom:
+            - configMapRef:
+                name: omnistudy-config
+            - secretRef:
+                name: omnistudy-secrets
+          env:
+            - name: APP_RUNTIME_ROLE
+              value: api
+            - name: AI_JOBS_ENABLED
+              value: "false"
+            - name: MAINTENANCE_ENABLED
+              value: "false"
+            - name: QUESTION_BANK_SEED_ENABLED
+              value: "true"
+            - name: AGENTSCOPE_ENABLED
+              value: "true"
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: management
+            failureThreshold: 36
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: management
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: management
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 10"]
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: agent-workspace
+              mountPath: /tmp/omnistudy-agentscope
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: agent-workspace
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: omnistudy-api
+  labels:
+    app.kubernetes.io/name: omnistudy-api
+spec:
+  selector:
+    app.kubernetes.io/name: omnistudy-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+    - name: management
+      port: 9091
+      targetPort: management

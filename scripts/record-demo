@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_dir="$(cd "$(dirname "$0")/.." && pwd)"
+mkdir -p "$repo_dir/artifacts/demo"
+
+(cd "$repo_dir" && VITE_API_BASE_URL="${VITE_API_BASE_URL:-http://localhost:8082}" \
+  pnpm --filter @omnistudy/extension build)
+(cd "$repo_dir/packages/extension" && \
+  OMNISTUDY_RECORD_DEMO=1 pnpm exec playwright test tests/demo.spec.ts --workers=1)
+
+echo "Demo recording: $repo_dir/artifacts/demo/omnistudy-ui-demo.webm"

@@ -1,0 +1,41 @@
+name: publish-backend-image
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve image name
+        id: image
+        shell: bash
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/omnistudy-backend"
+          echo "name=${image}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GitHub Container Registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build backend image
+        run: docker build -f packages/backend/Dockerfile -t "${{ steps.image.outputs.name }}:${GITHUB_SHA}" .
+
+      - name: Push immutable image
+        run: docker push "${{ steps.image.outputs.name }}:${GITHUB_SHA}"
+
+      - name: Publish release tag
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          docker tag "${{ steps.image.outputs.name }}:${GITHUB_SHA}" "${{ steps.image.outputs.name }}:${version}"
+          docker push "${{ steps.image.outputs.name }}:${version}"

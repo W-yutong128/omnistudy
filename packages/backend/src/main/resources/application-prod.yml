@@ -1,0 +1,32 @@
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+
+server:
+  # NATIVE 由 Tomcat 的可信代理规则解析来源地址；公网部署应只允许经 Ingress 访问后端。
+  forward-headers-strategy: ${SERVER_FORWARD_HEADERS_STRATEGY:NATIVE}
+
+app:
+  default-user:
+    enabled: false
+  jwt:
+    secret: ${JWT_SECRET}
+    expiration-ms: ${JWT_EXPIRATION_MS:1800000}
+  ai:
+    credentials:
+      encryption-key: ${AI_CREDENTIAL_ENCRYPTION_KEY}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS}
+  redis:
+    enabled: ${REDIS_ENABLED:true}
+
+logging:
+  level:
+    com.omnistudy: INFO

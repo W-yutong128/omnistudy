@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_dir="$(cd "$(dirname "$0")/.." && pwd)"
+env_file="$repo_dir/.env.local"
+
+if [[ ! -f "$env_file" ]]; then
+  echo "No .env.local found; OmniStudy has not been initialized."
+  exit 0
+fi
+
+cd "$repo_dir"
+docker compose --env-file "$env_file" --profile monitoring down
+echo "OmniStudy stopped. Database and monitoring volumes were preserved."

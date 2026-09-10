@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+required=(
+  KUBE_CONTEXT OMNISTUDY_IMAGE OMNISTUDY_API_HOST OMNISTUDY_TLS_SECRET
+  CORS_ALLOWED_ORIGINS DB_URL DB_USERNAME DB_PASSWORD REDIS_HOST REDIS_PORT
+  REDIS_PASSWORD JWT_SECRET AI_CREDENTIAL_ENCRYPTION_KEY
+)
+
+for name in "${required[@]}"; do
+  if [[ -z "${!name:-}" ]]; then
+    echo "Missing required environment variable: ${name}" >&2
+    exit 1
+  fi
+done
+
+command -v kubectl >/dev/null 2>&1 || {
+  echo "kubectl is required" >&2
+  exit 1
+}
+
+current_context="$(kubectl config current-context)"
+if [[ "$current_context" != "$KUBE_CONTEXT" ]]; then
+  echo "Refusing to deploy: current context is '$current_context', expected '$KUBE_CONTEXT'." >&2
+  exit 1
+fi
+
+if (( ${#JWT_SECRET} < 32 )); then
+  echo "JWT_SECRET must contain at least 32 characters" >&2
+  exit 1
+fi
+if (( ${#AI_CREDENTIAL_ENCRYPTION_KEY} < 32 )); then
+  echo "AI_CREDENTIAL_ENCRYPTION_KEY must contain at least 32 characters" >&2
+  exit 1
+fi
+[[ "$OMNISTUDY_API_HOST" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]] || {
+  echo "OMNISTUDY_API_HOST is not a valid hostname" >&2
+  exit 1
+}
+[[ "$OMNISTUDY_TLS_SECRET" =~ ^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$ ]] || {
+  echo "OMNISTUDY_TLS_SECRET must be a Kubernetes DNS name" >&2
+  exit 1
+}
+if [[ -n "${IMAGE_PULL_SECRET:-}" && ! "$IMAGE_PULL_SECRET" =~ ^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$ ]]; then
+  echo "IMAGE_PULL_SECRET must be a Kubernetes DNS name" >&2
+  exit 1
+fi
+[[ "$DB_USERNAME" =~ ^[A-Za-z0-9_.-]+$ ]] || {
+  echo "DB_USERNAME contains unsupported characters" >&2
+  exit 1
+}
+[[ "$REDIS_PORT" =~ ^[0-9]+$ ]] || {
+  echo "REDIS_PORT must be numeric" >&2
+  exit 1
+}
+if [[ "$OMNISTUDY_IMAGE" =~ [[:space:]\"\\] || "$CORS_ALLOWED_ORIGINS" =~ [\"\\] ]]; then
+  echo "Image/CORS values contain unsupported characters" >&2
+  exit 1
+fi
+
+root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+namespace="omnistudy"
+
+kubectl apply -f "$root_dir/deploy/k8s/base/namespace.yaml"
+
+if ! kubectl -n "$namespace" get secret "$OMNISTUDY_TLS_SECRET" >/dev/null 2>&1; then
+  echo "TLS Secret '$OMNISTUDY_TLS_SECRET' does not exist in namespace '$namespace'." >&2
+  echo "Create it (or let cert-manager create it) before deploying." >&2
+  exit 1
+fi
+
+# The generated Secret is piped directly to the API server and is never written to disk.
+kubectl -n "$namespace" create secret generic omnistudy-secrets \
+  --from-literal=DB_URL="$DB_URL" \
+  --from-literal=DB_PASSWORD="$DB_PASSWORD" \
+  --from-literal=REDIS_HOST="$REDIS_HOST" \
+  --from-literal=REDIS_PASSWORD="$REDIS_PASSWORD" \
+  --from-literal=JWT_SECRET="$JWT_SECRET" \
+  --from-literal=AI_CREDENTIAL_ENCRYPTION_KEY="$AI_CREDENTIAL_ENCRYPTION_KEY" \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+kubectl apply -k "$root_dir/deploy/k8s/base"
+
+if [[ -n "${IMAGE_PULL_SECRET:-}" ]]; then
+  kubectl -n "$namespace" get secret "$IMAGE_PULL_SECRET" >/dev/null
+  kubectl -n "$namespace" patch serviceaccount omnistudy-backend --type merge \
+    -p "{\"imagePullSecrets\":[{\"name\":\"$IMAGE_PULL_SECRET\"}]}"
+fi
+
+kubectl -n "$namespace" patch configmap omnistudy-config --type merge \
+  -p "{\"data\":{\"DB_USERNAME\":\"$DB_USERNAME\",\"REDIS_PORT\":\"$REDIS_PORT\",\"CORS_ALLOWED_ORIGINS\":\"$CORS_ALLOWED_ORIGINS\"}}"
+kubectl -n "$namespace" patch ingress omnistudy-api --type merge \
+  -p "{\"spec\":{\"tls\":[{\"hosts\":[\"$OMNISTUDY_API_HOST\"],\"secretName\":\"$OMNISTUDY_TLS_SECRET\"}],\"rules\":[{\"host\":\"$OMNISTUDY_API_HOST\",\"http\":{\"paths\":[{\"path\":\"/\",\"pathType\":\"Prefix\",\"backend\":{\"service\":{\"name\":\"omnistudy-api\",\"port\":{\"name\":\"http\"}}}}]}}]}}"
+
+kubectl -n "$namespace" set image deployment/omnistudy-api \
+  api="$OMNISTUDY_IMAGE" prepare-agent-workspace="$OMNISTUDY_IMAGE"
+kubectl -n "$namespace" set image deployment/omnistudy-worker \
+  worker="$OMNISTUDY_IMAGE"
+
+# ConfigMap changes do not automatically restart Pods.
+kubectl -n "$namespace" rollout restart deployment/omnistudy-api deployment/omnistudy-worker
+kubectl -n "$namespace" rollout status deployment/omnistudy-api --timeout=5m
+kubectl -n "$namespace" rollout status deployment/omnistudy-worker --timeout=10m
+
+kubectl -n "$namespace" get pods,hpa,pdb,ingress
+echo "Deployment complete. Verify: https://${OMNISTUDY_API_HOST}/health"
