@@ -1,17 +1,8 @@
 import React, { useEffect, useState } from "react";
+import type { AiProviderSettings } from "@omnistudy/shared";
 
-type Settings = {
-  configured: boolean;
-  source: "USER" | "NONE";
-  provider: string;
-  baseUrl: string;
-  maskedApiKey?: string;
-  fastVisionModel: string;
-  strongTextModel: string;
-};
-
-export const AiSettingsPanel: React.FC = () => {
-  const [settings, setSettings] = useState<Settings | null>(null);
+export const AiSettingsPanel: React.FC<{ onVerified?: () => void }> = ({ onVerified }) => {
+  const [settings, setSettings] = useState<AiProviderSettings | null>(null);
   const [apiKey, setApiKey] = useState("");
   const [fastVisionModel, setFastVisionModel] = useState("qwen3-vl-flash");
   const [strongTextModel, setStrongTextModel] = useState("qwen-plus");
@@ -26,7 +17,7 @@ export const AiSettingsPanel: React.FC = () => {
       setError(result?.error || "加载模型配置失败");
       return;
     }
-    const next = result.data as Settings;
+    const next = result.data as AiProviderSettings;
     setSettings(next);
     setFastVisionModel(next.fastVisionModel);
     setStrongTextModel(next.strongTextModel);
@@ -45,7 +36,9 @@ export const AiSettingsPanel: React.FC = () => {
     });
     setSaving(false);
     if (!result?.success) { setError(result?.error || "保存失败"); return; }
-    setSettings(result.data); setApiKey(""); setMessage("已加密保存，后续 AI 调用将使用你的 Key");
+    setSettings(result.data); setApiKey("");
+    setMessage("Key 已加密保存，正在验证模型连接…");
+    await testConnection(true);
   };
 
   const remove = async () => {
@@ -56,12 +49,18 @@ export const AiSettingsPanel: React.FC = () => {
     setSettings(result.data); setApiKey(""); setMessage("个人 Key 已删除");
   };
 
-  const testConnection = async () => {
+  const testConnection = async (afterSave = false) => {
     setError(""); setMessage(""); setTesting(true);
     const result = await chrome.runtime.sendMessage({ type: "ai-settings:test" });
     setTesting(false);
-    if (!result?.success) { setError(result?.error || "连接测试失败"); return; }
+    if (!result?.success) {
+      setError((afterSave ? "Key 已保存，但连接验证失败：" : "连接测试失败：") + (result?.error || "未知错误"));
+      await load();
+      return;
+    }
+    await load();
     setMessage(`${result.data.message} · ${result.data.model} · ${result.data.latencyMs}ms`);
+    onVerified?.();
   };
 
   return (
@@ -72,9 +71,12 @@ export const AiSettingsPanel: React.FC = () => {
 
         <div className="mt-3 rounded-md bg-indigo-50 p-3 text-xs text-indigo-800">
           {!settings ? "正在读取配置…" : settings.source === "USER"
-            ? `正在使用你的 Key（${settings.maskedApiKey}）`
+            ? `${settings.connectionStatus === "VERIFIED" ? "✓ 已验证" : settings.connectionStatus === "FAILED" ? "⚠ 验证失败" : "待验证"} · 正在使用你的 Key（${settings.maskedApiKey}）`
             : "尚未配置个人 Key，AI 功能暂不可用"}
         </div>
+
+        {settings?.lastVerifiedAt && <p className="mt-2 text-[11px] text-green-600">最近验证：{new Date(settings.lastVerifiedAt).toLocaleString("zh-CN", { hour12: false })}</p>}
+        {settings?.lastTestError && <p className="mt-2 text-[11px] text-red-500">最近失败：{settings.lastTestError}</p>}
 
         {error && <div className="mt-3 rounded bg-red-50 p-2 text-xs text-red-600">{error}</div>}
         {message && <div className="mt-3 rounded bg-green-50 p-2 text-xs text-green-700">{message}</div>}
@@ -95,8 +97,8 @@ export const AiSettingsPanel: React.FC = () => {
             <input value={strongTextModel} onChange={event => setStrongTextModel(event.target.value)}
               className="mt-1 w-full rounded border px-3 py-2 text-sm" />
           </label>
-          <button disabled={saving} className="w-full rounded bg-indigo-600 py-2 text-sm font-medium text-white disabled:bg-gray-300">
-            {saving ? "保存中…" : settings?.source === "USER" ? "替换个人 Key" : "保存个人 Key"}
+          <button disabled={saving || testing} className="w-full rounded bg-indigo-600 py-2 text-sm font-medium text-white disabled:bg-gray-300">
+            {saving || testing ? "保存并验证中…" : settings?.source === "USER" ? "替换并验证 Key" : "保存并验证 Key"}
           </button>
         </form>
 

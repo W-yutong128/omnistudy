@@ -6,5 +6,6 @@ public record NoteResponse(
     NoteContentDto content,
     String generatedAt,
     String status,
+    String contentStatus,
     String error
 ) {}

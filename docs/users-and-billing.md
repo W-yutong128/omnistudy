@@ -33,6 +33,8 @@ Never commit these values. Production deployments should inject them through a s
 - `PUT /api/settings/ai-provider` encrypts and replaces the current user's key.
 - `DELETE /api/settings/ai-provider` deletes the current user's key.
 - `POST /api/settings/ai-provider/test` performs an explicit minimal text-model request and reports the model and latency. The real Token usage is recorded as `CONNECTION_TEST`.
+- Connection verification state and the last successful verification time are persisted. Replacing a Key resets it to `UNVERIFIED`; a successful or failed test changes it to `VERIFIED` or `FAILED` without ever returning the plaintext Key.
+- `GET /api/usage/today` returns only the signed-in user's daily input/output/cached Token, estimated cost, success/failure counts and per-feature breakdown. The extension combines it with owned knowledge points and Agent traces in the “概览” tab.
 
 Keys are encrypted using AES-256-GCM with a fresh random IV for every update. Plaintext keys are never returned to the extension and are not stored in browser storage, logs, metrics or AI jobs. OmniStudy is strict BYOK: the server has no shared model key and AI features remain unavailable until the signed-in user saves a personal key.
 

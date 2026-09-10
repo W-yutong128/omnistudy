@@ -7,6 +7,8 @@ public record AiProviderSettingsResponse(
         String baseUrl,
         String maskedApiKey,
         String fastVisionModel,
-        String strongTextModel
+        String strongTextModel,
+        String connectionStatus,
+        String lastVerifiedAt,
+        String lastTestError
 ) {}
-

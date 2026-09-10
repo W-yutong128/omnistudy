@@ -40,6 +40,7 @@ class AiCredentialServiceTest {
                 .map(invocation -> (UserAiCredential) invocation.getArgument(0)).findFirst().orElseThrow();
 
         assertEquals("****9876", response.maskedApiKey());
+        assertEquals("UNVERIFIED", response.connectionStatus());
         assertFalse(stored.getKeyCiphertext().contains("sk-user-secret"));
         when(repository.findById(userId)).thenReturn(Optional.of(stored));
         assertEquals("sk-user-secret-9876", service.resolve(userId).apiKey());
@@ -53,7 +54,26 @@ class AiCredentialServiceTest {
 
         assertFalse(service.settings(userId).configured());
         assertEquals("NONE", service.settings(userId).source());
+        assertEquals("NOT_CONFIGURED", service.settings(userId).connectionStatus());
         assertThrows(MissingAiCredentialException.class, () -> service.resolve(userId));
+    }
+
+    @Test
+    void exposesPersistedConnectionVerificationWithoutReturningTheKey() {
+        UUID userId = UUID.randomUUID();
+        UserAiCredential credential = UserAiCredential.builder()
+                .userId(userId).keyCiphertext("ciphertext").keyIv("iv").keyHint("9876")
+                .fastVisionModel("vision").strongTextModel("text").build();
+        when(repository.findById(userId)).thenReturn(Optional.of(credential));
+        when(repository.save(any(UserAiCredential.class))).thenAnswer(call -> call.getArgument(0));
+
+        service.markConnectionSucceeded(userId);
+        var response = service.settings(userId);
+
+        assertEquals("VERIFIED", response.connectionStatus());
+        assertNotNull(response.lastVerifiedAt());
+        assertNull(response.lastTestError());
+        assertEquals("****9876", response.maskedApiKey());
     }
 
     @Test

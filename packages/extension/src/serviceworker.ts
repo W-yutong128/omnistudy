@@ -337,6 +337,29 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
+  if (message.type?.startsWith("insights:")) {
+    (async () => {
+      try {
+        const paths: Record<string, string> = {
+          "insights:usage": "/api/usage/today",
+          "insights:weak": "/api/knowledge/weak",
+          "insights:due": "/api/knowledge/due",
+          "insights:traces": "/api/agent/traces",
+        };
+        const path = paths[message.type];
+        if (!path) return respondOnce({ success: false, error: "未知的学习概览请求" });
+        const res = await authenticatedFetch(backendUrl(path));
+        const json = await readApiResponse(res);
+        respondOnce(res.ok && json.success
+          ? { success: true, data: json.data }
+          : { success: false, error: json.error ?? `HTTP ${res.status}` });
+      } catch (e) {
+        respondOnce({ success: false, error: (e as Error).message });
+      }
+    })();
+    return true;
+  }
+
   if (message.type === "agent:chat") {
     (async () => {
       try {

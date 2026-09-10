@@ -30,5 +30,24 @@ class AiProviderConnectionServiceTest {
         assertEquals("qwen-plus", result.model());
         assertTrue(result.latencyMs() >= 0);
         verify(ai).generate(eq(userId), eq(AiTask.CONNECTION_TEST), any(AiRequest.class));
+        verify(credentials).markConnectionSucceeded(userId);
+        verify(credentials, never()).markConnectionFailed(eq(userId), anyString());
+    }
+
+    @Test
+    void remembersConnectionFailureForFirstRunGuidance() {
+        AiCredentialService credentials = mock(AiCredentialService.class);
+        MeteredAiService ai = mock(MeteredAiService.class);
+        AiProviderConnectionService service = new AiProviderConnectionService(credentials, ai);
+        UUID userId = UUID.randomUUID();
+        when(credentials.resolve(userId)).thenReturn(new AiCredentialService.ResolvedCredential(
+                "dashscope", "https://example.test/v1", "secret", "vision", "qwen-plus", "USER"));
+        when(ai.generate(eq(userId), eq(AiTask.CONNECTION_TEST), any(AiRequest.class)))
+                .thenThrow(new IllegalStateException("unauthorized"));
+
+        assertThrows(IllegalStateException.class, () -> service.test(userId));
+
+        verify(credentials).markConnectionFailed(userId, "无法连接 DashScope，请检查网络、API Key 和模型名称");
+        verify(credentials, never()).markConnectionSucceeded(userId);
     }
 }

@@ -4,6 +4,7 @@ import com.omnistudy.exception.QuotaExceededException;
 import com.omnistudy.model.entity.AgentTrace;
 import com.omnistudy.model.entity.UsageRecord;
 import com.omnistudy.model.entity.UserQuota;
+import com.omnistudy.model.dto.UserUsageOverviewResponse;
 import com.omnistudy.repository.UsageRecordRepository;
 import com.omnistudy.repository.UserQuotaRepository;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.*;
 import java.util.UUID;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -119,6 +121,36 @@ public class AgentUsageService {
                 input * inputYuanPerMillion + output * outputYuanPerMillion)));
         usage.setStatus(requestSucceeded ? "SUCCEEDED" : "FAILED");
         usage.setUpdatedAt(OffsetDateTime.now());
+    }
+
+    @Transactional(readOnly = true)
+    public UserUsageOverviewResponse todayOverview(UUID userId) {
+        OffsetDateTime since = today();
+        List<UserUsageOverviewResponse.FeatureUsage> features = usageRepository
+                .summarizeUserByFeatureSince(userId, since).stream()
+                .map(this::featureUsage)
+                .toList();
+        return new UserUsageOverviewResponse(
+                since.toString(),
+                features.stream().mapToLong(UserUsageOverviewResponse.FeatureUsage::requests).sum(),
+                features.stream().mapToLong(UserUsageOverviewResponse.FeatureUsage::inputTokens).sum(),
+                features.stream().mapToLong(UserUsageOverviewResponse.FeatureUsage::outputTokens).sum(),
+                features.stream().mapToLong(UserUsageOverviewResponse.FeatureUsage::cachedTokens).sum(),
+                features.stream().mapToLong(UserUsageOverviewResponse.FeatureUsage::totalTokens).sum(),
+                features.stream().mapToLong(UserUsageOverviewResponse.FeatureUsage::estimatedCostMicros).sum(),
+                features.stream().mapToLong(UserUsageOverviewResponse.FeatureUsage::succeeded).sum(),
+                features.stream().mapToLong(UserUsageOverviewResponse.FeatureUsage::failed).sum(),
+                features);
+    }
+
+    private UserUsageOverviewResponse.FeatureUsage featureUsage(Object[] row) {
+        return new UserUsageOverviewResponse.FeatureUsage(
+                String.valueOf(row[0]), number(row[1]), number(row[2]), number(row[3]),
+                number(row[4]), number(row[5]), number(row[6]), number(row[7]), number(row[8]));
+    }
+
+    private long number(Object value) {
+        return value instanceof Number number ? number.longValue() : 0L;
     }
 
     private OffsetDateTime today() {

@@ -70,6 +70,7 @@ export interface Note {
   content: NoteContent | null;
   generatedAt: string | null;
   status: NoteStatus;
+  contentStatus: NoteContentStatus;
   error?: string | null;
 }
 
@@ -175,6 +176,66 @@ export interface AuthResponse {
   token: string;
   userId: string;
   expiresAt: string;
+}
+
+// ==================== 模型配置与用量 ====================
+
+export type AiConnectionStatus = "NOT_CONFIGURED" | "UNVERIFIED" | "VERIFIED" | "FAILED";
+
+export interface AiProviderSettings {
+  configured: boolean;
+  source: "USER" | "NONE";
+  provider: string;
+  baseUrl: string;
+  maskedApiKey?: string;
+  fastVisionModel: string;
+  strongTextModel: string;
+  connectionStatus: AiConnectionStatus;
+  lastVerifiedAt?: string;
+  lastTestError?: string;
+}
+
+export interface FeatureUsage {
+  feature: string;
+  requests: number;
+  inputTokens: number;
+  outputTokens: number;
+  cachedTokens: number;
+  totalTokens: number;
+  estimatedCostMicros: number;
+  succeeded: number;
+  failed: number;
+}
+
+export interface UserUsageOverview {
+  periodStart: string;
+  requests: number;
+  inputTokens: number;
+  outputTokens: number;
+  cachedTokens: number;
+  totalTokens: number;
+  estimatedCostMicros: number;
+  succeeded: number;
+  failed: number;
+  features: FeatureUsage[];
+}
+
+export interface AgentTrace {
+  id: string;
+  state: string;
+  tool?: string;
+  skill?: string;
+  model?: string;
+  promptVersion: string;
+  framework: string;
+  inputTokens: number;
+  outputTokens: number;
+  cachedTokens: number;
+  steps: number;
+  latencyMs: number;
+  success: boolean;
+  error?: string;
+  createdAt: string;
 }
 
 // ==================== 通用 ====================

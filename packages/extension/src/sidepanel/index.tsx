@@ -4,6 +4,7 @@ import { NotePanel } from "./NotePanel";
 import { AgentPanel } from "./AgentPanel";
 import { AdminPanel } from "./AdminPanel";
 import { AiSettingsPanel } from "./AiSettingsPanel";
+import { InsightsPanel } from "./InsightsPanel";
 import { API_BASE_URL } from "../config";
 import "./styles.css";
 
@@ -45,7 +46,8 @@ export const App: React.FC = () => {
   const [deleteInProgress, setDeleteInProgress] = useState(false);
   const [deleteError, setDeleteError] = useState("");
   const [deleteResolvingIndex, setDeleteResolvingIndex] = useState<number | null>(null);
-  const [activeSection, setActiveSection] = useState<"learning" | "agent" | "notes" | "models" | "admin">("learning");
+  const [activeSection, setActiveSection] = useState<"learning" | "agent" | "notes" | "insights" | "models" | "admin">("learning");
+  const [aiConnectionStatus, setAiConnectionStatus] = useState<"UNKNOWN" | "NOT_CONFIGURED" | "UNVERIFIED" | "VERIFIED" | "FAILED">("UNKNOWN");
   const [noteRefreshKey, setNoteRefreshKey] = useState(0);
   const [noteSyncStatus, setNoteSyncStatus] = useState<"idle" | "flushing" | "generating" | "success" | "error">("idle");
   const [noteSyncMessage, setNoteSyncMessage] = useState("");
@@ -102,6 +104,12 @@ export const App: React.FC = () => {
             const hydrated = { ...authResult.auth, username: me.data.username, role: me.data.role };
             await chrome.storage.local.set({ auth: hydrated });
             setAuth(hydrated);
+          }
+          const aiSettings = await chrome.runtime.sendMessage({ type: "ai-settings:get" });
+          if (aiSettings?.success) {
+            const status = aiSettings.data?.connectionStatus || (aiSettings.data?.configured ? "UNVERIFIED" : "NOT_CONFIGURED");
+            setAiConnectionStatus(status);
+            if (status !== "VERIFIED") setActiveSection("models");
           }
           const latestAuth = await chrome.storage.local.get("auth");
           if (!latestAuth.auth) {
@@ -178,6 +186,12 @@ export const App: React.FC = () => {
       await chrome.storage.local.set({ auth: authInfo });
       setAuth(authInfo);
       setShowLogin(false);
+      const aiSettings = await chrome.runtime.sendMessage({ type: "ai-settings:get" });
+      if (aiSettings?.success) {
+        const status = aiSettings.data?.connectionStatus || (aiSettings.data?.configured ? "UNVERIFIED" : "NOT_CONFIGURED");
+        setAiConnectionStatus(status);
+        if (status !== "VERIFIED") setActiveSection("models");
+      }
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (tab?.url) {
         await handleContextReady(tab.url);
@@ -196,6 +210,7 @@ export const App: React.FC = () => {
     setError(null);
     setShowLogin(true);
     setActiveSection("learning");
+    setAiConnectionStatus("UNKNOWN");
   };
 
   const handleContextReady = async (url: string) => {
@@ -523,14 +538,23 @@ export const App: React.FC = () => {
         <button onClick={() => setActiveSection("learning")} className={`flex-1 py-2.5 text-sm font-medium ${activeSection === "learning" ? "border-b-2 border-indigo-600 text-indigo-600" : "text-gray-500"}`}>学习</button>
         <button onClick={() => setActiveSection("agent")} className={`flex-1 py-2.5 text-sm font-medium ${activeSection === "agent" ? "border-b-2 border-indigo-600 text-indigo-600" : "text-gray-500"}`}>Agent</button>
         <button onClick={() => setActiveSection("notes")} className={`flex-1 py-2.5 text-sm font-medium ${activeSection === "notes" ? "border-b-2 border-indigo-600 text-indigo-600" : "text-gray-500"}`}>笔记</button>
+        <button onClick={() => setActiveSection("insights")} className={`flex-1 py-2.5 text-sm font-medium ${activeSection === "insights" ? "border-b-2 border-indigo-600 text-indigo-600" : "text-gray-500"}`}>概览</button>
         <button onClick={() => setActiveSection("models")} className={`flex-1 py-2.5 text-sm font-medium ${activeSection === "models" ? "border-b-2 border-indigo-600 text-indigo-600" : "text-gray-500"}`}>模型</button>
         {auth?.role === "ADMIN" && <button onClick={() => setActiveSection("admin")} className={`flex-1 py-2.5 text-sm font-medium ${activeSection === "admin" ? "border-b-2 border-indigo-600 text-indigo-600" : "text-gray-500"}`}>管理</button>}
       </nav>
 
+      {aiConnectionStatus !== "UNKNOWN" && aiConnectionStatus !== "VERIFIED" && activeSection !== "models" && (
+        <button onClick={() => setActiveSection("models")} className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-left text-xs text-amber-800">
+          {aiConnectionStatus === "NOT_CONFIGURED" ? "完成模型配置后即可使用 AI 功能" : aiConnectionStatus === "FAILED" ? "模型连接验证失败，点击检查配置" : "API Key 尚未验证，点击完成连接测试"} →
+        </button>
+      )}
+
       {activeSection === "admin" && auth?.role === "ADMIN" ? (
         <AdminPanel />
       ) : activeSection === "models" ? (
-        <AiSettingsPanel />
+        <AiSettingsPanel onVerified={() => setAiConnectionStatus("VERIFIED")} />
+      ) : activeSection === "insights" ? (
+        <InsightsPanel sessionId={session?.id} refreshKey={noteRefreshKey} />
       ) : activeSection === "agent" ? (
         <AgentPanel sessionId={session?.id} authenticated={!!auth} />
       ) : activeSection === "notes" ? (

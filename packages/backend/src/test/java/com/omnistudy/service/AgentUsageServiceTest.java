@@ -8,6 +8,7 @@ import com.omnistudy.repository.UserQuotaRepository;
 import org.junit.jupiter.api.Test;
 
 import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -78,5 +79,26 @@ class AgentUsageServiceTest {
             assertEquals("CONTEXT_COMPACTION", record.getFeature());
             return true;
         }));
+    }
+
+    @Test
+    void buildsSignedInUsersDailyUsageOverview() {
+        UUID userId = UUID.randomUUID();
+        when(usage.summarizeUserByFeatureSince(eq(userId), any())).thenReturn(List.of(
+                new Object[]{"AGENT_V2", 2L, 120L, 30L, 20L, 150L, 63L, 2L, 0L},
+                new Object[]{"NOTE_FINALIZE", 1L, 300L, 80L, 0L, 380L, 165L, 0L, 1L}
+        ));
+
+        var overview = service.todayOverview(userId);
+
+        assertEquals(3L, overview.requests());
+        assertEquals(420L, overview.inputTokens());
+        assertEquals(110L, overview.outputTokens());
+        assertEquals(20L, overview.cachedTokens());
+        assertEquals(530L, overview.totalTokens());
+        assertEquals(228L, overview.estimatedCostMicros());
+        assertEquals(2L, overview.succeeded());
+        assertEquals(1L, overview.failed());
+        assertEquals(2, overview.features().size());
     }
 }

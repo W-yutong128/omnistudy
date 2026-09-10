@@ -12,6 +12,7 @@
 - **质量工程**：离线路由 Evals、JUnit、真实 MV3 Playwright E2E、GitHub Actions
 - **安全 handoff**：写代码场景需用户确认后，才通过 allowlist Native Messaging 桥接 IDEA
 - **Token 管理**：12k 上下文预算、最多 3 轮工具调用、20 条消息触发压缩，并持久化输入/输出/缓存 Token
+- **学习概览**：普通用户可查看按功能拆分的每日 Token/成本、Agent Trace、最终笔记状态、薄弱点与待复习项
 - **严格 BYOK**：注册、JWT/Refresh Token、USER/ADMIN 权限、用户级 DashScope Key 与 AES-GCM 加密存储；服务器不提供共享模型 Key
 - **流量治理**：Redis Lua 分布式限流、JWT 权限短缓存、Redis 故障时实例内安全降级
 - **可观测性**：Prometheus 指标采集 + 自动 Provisioning 的 Grafana 系统总览面板
@@ -91,7 +92,7 @@ Prometheus、Grafana、API/Worker 容器拓扑见 [docs/observability.md](docs/o
 Kubernetes 双副本、滚动更新、HPA、PDB 与 Ingress 部署清单见 [deploy/k8s/README.md](deploy/k8s/README.md)。
 自动化演示视频与手工答辩录制脚本见 [docs/demo-video.md](docs/demo-video.md)。
 
-生产后端使用 `SPRING_PROFILES_ACTIVE=prod` 启动；该 Profile 会关闭测试用户、把 Access Token 默认缩短为 30 分钟，并要求显式提供数据库、JWT、凭证加密密钥和 CORS 来源。服务器不读取模型 Key，每位用户必须在插件“模型”页配置自己的 Key。Kubernetes 探针可分别访问 `/actuator/health/liveness` 与 `/actuator/health/readiness`。
+生产后端使用 `SPRING_PROFILES_ACTIVE=prod` 启动；该 Profile 会关闭测试用户、把 Access Token 默认缩短为 30 分钟，并要求显式提供数据库、JWT、凭证加密密钥和 CORS 来源。服务器不读取模型 Key，每位用户必须在插件“模型”页配置并验证自己的 Key。首次登录且未完成验证时，插件会自动进入模型配置页。Kubernetes 探针可分别访问 `/actuator/health/liveness` 与 `/actuator/health/readiness`。
 
 ### 打开 B 站视频
 

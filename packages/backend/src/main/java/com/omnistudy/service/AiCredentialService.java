@@ -41,8 +41,30 @@ public class AiCredentialService {
         value.setKeyHint(hint(rawKey));
         value.setFastVisionModel(normalizeModel(request.fastVisionModel(), defaultFastVisionModel));
         value.setStrongTextModel(normalizeModel(request.strongTextModel(), defaultStrongTextModel));
+        value.setLastVerifiedAt(null);
+        value.setLastTestError(null);
         value.setUpdatedAt(OffsetDateTime.now());
         return response(repository.save(value), "USER");
+    }
+
+    @Transactional
+    public void markConnectionSucceeded(UUID userId) {
+        repository.findById(userId).ifPresent(value -> {
+            value.setLastVerifiedAt(OffsetDateTime.now());
+            value.setLastTestError(null);
+            value.setUpdatedAt(OffsetDateTime.now());
+            repository.save(value);
+        });
+    }
+
+    @Transactional
+    public void markConnectionFailed(UUID userId, String message) {
+        repository.findById(userId).ifPresent(value -> {
+            value.setLastVerifiedAt(null);
+            value.setLastTestError(limit(message, 500));
+            value.setUpdatedAt(OffsetDateTime.now());
+            repository.save(value);
+        });
     }
 
     @Transactional
@@ -62,21 +84,31 @@ public class AiCredentialService {
     }
 
     private AiProviderSettingsResponse response(UserAiCredential value, String source) {
+        String connectionStatus = value.getLastVerifiedAt() != null ? "VERIFIED"
+                : value.getLastTestError() != null ? "FAILED" : "UNVERIFIED";
         return new AiProviderSettingsResponse(true, source, value.getProvider(), baseUrl,
                 "****" + value.getKeyHint(),
                 normalizeModel(value.getFastVisionModel(), defaultFastVisionModel),
-                normalizeModel(value.getStrongTextModel(), defaultStrongTextModel));
+                normalizeModel(value.getStrongTextModel(), defaultStrongTextModel),
+                connectionStatus,
+                value.getLastVerifiedAt() == null ? null : value.getLastVerifiedAt().toString(),
+                value.getLastTestError());
     }
 
     private AiProviderSettingsResponse unconfiguredSettings() {
         return new AiProviderSettingsResponse(false, "NONE", "dashscope", baseUrl, null,
-                defaultFastVisionModel, defaultStrongTextModel);
+                defaultFastVisionModel, defaultStrongTextModel, "NOT_CONFIGURED", null, null);
     }
 
     private String normalizeModel(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value.trim();
     }
     private String hint(String value) { return value.substring(Math.max(0, value.length() - 4)); }
+    private String limit(String value, int maxLength) {
+        if (value == null || value.isBlank()) return "连接测试失败";
+        String normalized = value.replaceAll("[\\r\\n]+", " ").trim();
+        return normalized.length() <= maxLength ? normalized : normalized.substring(0, maxLength);
+    }
     public record ResolvedCredential(String provider, String baseUrl, String apiKey,
                                      String fastVisionModel, String strongTextModel, String source) {}
 }

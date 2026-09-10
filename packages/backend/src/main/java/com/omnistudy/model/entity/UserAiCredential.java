@@ -33,6 +33,12 @@ public class UserAiCredential {
     @Column(name = "strong_text_model", length = 100)
     private String strongTextModel;
 
+    @Column(name = "last_verified_at")
+    private OffsetDateTime lastVerifiedAt;
+
+    @Column(name = "last_test_error", length = 500)
+    private String lastTestError;
+
     @Column(name = "created_at", nullable = false)
     @Builder.Default
     private OffsetDateTime createdAt = OffsetDateTime.now();
@@ -41,4 +47,3 @@ public class UserAiCredential {
     @Builder.Default
     private OffsetDateTime updatedAt = OffsetDateTime.now();
 }
-

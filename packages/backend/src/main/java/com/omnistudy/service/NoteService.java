@@ -504,7 +504,7 @@ public class NoteService {
         }
         Note note = noteRepository.findBySessionId(parsedSessionId).map(this::reconcileLegacyWeakPoints).orElse(null);
         if (note == null) {
-            return new NoteResponse(null, sessionId, null, null, "generating", null);
+            return new NoteResponse(null, sessionId, null, null, "generating", "draft", null);
         }
 
         NoteContentDto content = null;
@@ -523,6 +523,7 @@ public class NoteService {
                 content,
                 note.getGeneratedAt() != null ? note.getGeneratedAt().toString() : null,
                 note.getStatus(),
+                note.getContentStatus(),
                 jobError
         );
     }
