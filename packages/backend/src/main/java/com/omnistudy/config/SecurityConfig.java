@@ -50,13 +50,13 @@ public class SecurityConfig {
                     response.setStatus(HttpStatus.UNAUTHORIZED.value());
                     response.setContentType(MediaType.APPLICATION_JSON_VALUE);
                     response.setCharacterEncoding("UTF-8");
-                    objectMapper.writeValue(response.getWriter(), ApiResponse.fail("登录已过期，请重新登录"));
+                    objectMapper.writeValue(response.getWriter(), ApiResponse.fail("AUTH_REQUIRED", "登录已过期，请重新登录"));
                 })
                 .accessDeniedHandler((request, response, exception) -> {
                     response.setStatus(HttpStatus.FORBIDDEN.value());
                     response.setContentType(MediaType.APPLICATION_JSON_VALUE);
                     response.setCharacterEncoding("UTF-8");
-                    objectMapper.writeValue(response.getWriter(), ApiResponse.fail("没有权限执行该操作"));
+                    objectMapper.writeValue(response.getWriter(), ApiResponse.fail("FORBIDDEN", "没有权限执行该操作"));
                 }))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/login", "/api/auth/register", "/api/auth/refresh", "/api/auth/logout",

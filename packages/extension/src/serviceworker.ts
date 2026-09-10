@@ -11,7 +11,13 @@ type StoredAuth = {
   expiresAt?: string;
 };
 
-type ApiEnvelope<T = unknown> = { success: boolean; data?: T; error?: string };
+type ApiEnvelope<T = unknown> = {
+  success: boolean;
+  data?: T;
+  error?: string;
+  code?: string;
+  traceId?: string;
+};
 
 async function readApiResponse<T = unknown>(response: Response): Promise<ApiEnvelope<T>> {
   const text = await response.text();
@@ -23,6 +29,41 @@ async function readApiResponse<T = unknown>(response: Response): Promise<ApiEnve
   } catch {
     return { success: false, error: `后端返回了无法解析的内容（HTTP ${response.status}）` };
   }
+}
+
+function requireText(value: unknown, label: string, maxLength: number, allowEmpty = false): string {
+  if (typeof value !== "string" || (!allowEmpty && !value.trim())) {
+    throw new Error(`${label}无效`);
+  }
+  if (value.length > maxLength) throw new Error(`${label}过长`);
+  return value;
+}
+
+function validateInterceptPayload(raw: unknown, auto: boolean) {
+  if (!raw || typeof raw !== "object") throw new Error("拦截参数无效");
+  const payload = raw as Record<string, unknown>;
+  const sessionId = requireText(payload.sessionId, "学习会话", 64);
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(sessionId)) {
+    throw new Error("学习会话无效，请刷新后重试");
+  }
+  const time = requireText(payload.time, "视频时间", 16);
+  if (!/^\d{1,4}:[0-5]\d$/.test(time)) throw new Error("视频时间格式无效");
+  const difficulty = Number(payload.difficulty);
+  const part = Number(payload.part ?? 1);
+  if (!Number.isInteger(difficulty) || difficulty < 1 || difficulty > 3) throw new Error("题目难度无效");
+  if (!Number.isInteger(part) || part < 1 || part > 10000) throw new Error("视频分集编号无效");
+
+  return {
+    sessionId,
+    time,
+    screenshot: requireText(payload.screenshot, "视频截图", 8_000_000, true),
+    before: requireText(payload.before, "前文字幕", 20_000, true),
+    current: requireText(payload.current, "当前字幕", 20_000, true),
+    after: requireText(payload.after, "后文字幕", 20_000, true),
+    difficulty,
+    part,
+    ...(auto ? { auto: true } : {}),
+  };
 }
 
 async function authenticatedFetch(url: string, init: RequestInit = {}): Promise<Response> {
@@ -90,11 +131,60 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     sendResponse(data);
   };
 
+  if (message.type === "session:start") {
+    (async () => {
+      try {
+        const { videoUrl, videoTitle } = message.payload ?? {};
+        if (typeof videoUrl !== "string" || videoUrl.length > 2048) {
+          return respondOnce({ success: false, error: "视频地址无效" });
+        }
+        let parsedUrl: URL;
+        try {
+          parsedUrl = new URL(videoUrl);
+        } catch {
+          return respondOnce({ success: false, error: "视频地址无效" });
+        }
+        if (parsedUrl.protocol !== "https:" || !/(^|\.)bilibili\.com$/i.test(parsedUrl.hostname)) {
+          return respondOnce({ success: false, error: "当前页面不是受支持的哔哩哔哩视频" });
+        }
+        if (typeof videoTitle !== "string" || !videoTitle.trim() || videoTitle.length > 500) {
+          return respondOnce({ success: false, error: "视频标题不能为空" });
+        }
+        const res = await authenticatedFetch(backendUrl("/api/session/start"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ videoUrl, videoTitle: videoTitle.trim() }),
+        });
+        respondOnce(await readApiResponse(res));
+      } catch (e) {
+        respondOnce({ success: false, error: (e as Error).message });
+      }
+    })();
+    return true;
+  }
+
+  if (message.type === "manual:intercept") {
+    (async () => {
+      try {
+        const payload = validateInterceptPayload(message.payload, false);
+        const res = await authenticatedFetch(backendUrl("/api/intercept"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        respondOnce(await readApiResponse(res));
+      } catch (e) {
+        respondOnce({ success: false, error: (e as Error).message });
+      }
+    })();
+    return true;
+  }
+
   // Handle auto:intercept from content script (bypass CORS)
   if (message.type === "auto:intercept") {
     (async () => {
       try {
-        const { sessionId, time, screenshot, before, current, after, difficulty, part } = message.payload ?? {};
+        const payload = validateInterceptPayload(message.payload, true);
         const { auth } = await chrome.storage.local.get("auth");
         if (!auth?.token) {
           respondOnce({ success: false, error: "未登录" });
@@ -106,7 +196,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${auth.token}`,
           },
-          body: JSON.stringify({ sessionId, time, screenshot, before, current, after, difficulty, auto: true, part }),
+          body: JSON.stringify(payload),
         });
         const json = await readApiResponse(res);
         respondOnce(json);

@@ -47,7 +47,7 @@ public class InterceptController {
             interceptService.deleteById(id, userId);
             return ResponseEntity.ok(ApiResponse.ok(null));
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(ApiResponse.fail(e.getMessage()));
+            return ResponseEntity.badRequest().body(ApiResponse.fail("INVALID_ARGUMENT", e.getMessage()));
         }
     }
 

@@ -28,15 +28,11 @@ jobs:
           java-version: "21"
           cache: maven
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: mvn test
-        working-directory: packages/backend
-      - run: pnpm --filter @omnistudy/extension build
       - run: pnpm exec playwright install --with-deps chromium
-      - run: xvfb-run pnpm --filter @omnistudy/extension test:e2e
+      - run: xvfb-run ./scripts/verify
+      - run: ./scripts/audit-release

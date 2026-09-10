@@ -244,6 +244,8 @@ export type ApiResponse<T> = {
   success: boolean;
   data?: T;
   error?: string;
+  code?: string;
+  traceId?: string;
 };
 
 export type QuestionType = InterceptResult["questionType"];

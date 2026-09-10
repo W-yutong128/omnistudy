@@ -76,7 +76,6 @@ function invalidateExtensionContext() {
   videoEl?.removeEventListener("timeupdate", onTimeUpdate);
   videoEl?.removeEventListener("pause", onPause);
   videoEl?.removeEventListener("ended", onEnded);
-  videoEl?.removeEventListener("ended", onEnded);
   videoEl = null;
   closeQuestionModal(false);
 
@@ -114,6 +113,7 @@ function bindVideoElement(nextVideo: HTMLVideoElement, resetSchedule: boolean) {
 
   videoEl?.removeEventListener("timeupdate", onTimeUpdate);
   videoEl?.removeEventListener("pause", onPause);
+  videoEl?.removeEventListener("ended", onEnded);
   videoEl = nextVideo;
   videoEl.addEventListener("timeupdate", onTimeUpdate);
   videoEl.addEventListener("pause", onPause);
@@ -224,7 +224,6 @@ async function init() {
       closeQuestionModal(false);
       SUBTITLE_HISTORY.length = 0;
       lastInterceptContextText = "";
-      safeSendMessage({ type: "context:ready", payload: { url: currentUrl, part: getCurrentPart(), totalParts: getTotalParts() } });
       // 延迟检测，等 B站页面完成跳转
       if (waitVideoTimeout !== null) window.clearTimeout(waitVideoTimeout);
       waitVideoTimeout = window.setTimeout(waitVideo, 2000);
@@ -733,59 +732,28 @@ function getCurrentPart(): number {
   const urlPart = Number(new URL(location.href).searchParams.get("p"));
   if (Number.isInteger(urlPart) && urlPart > 0) return urlPart;
 
-  // 合集/课程列表通常没有 ?p=，只能从当前高亮项推断集数。
-  // 各选择器覆盖 B 站目前的新旧多 P、合集和播放器内剧集列表。
-  const listSelectors = [
-    ".multi-page-v1 .list-box",
-    ".cur-list .list-box",
-    ".video-pod__list",
-    ".bpx-player-episode-list",
-  ];
-  const itemSelectors = [
-    "li",
-    ".video-pod__item",
-    ".bpx-player-episode-item",
-  ].join(",");
-  const activeSelector = [
-    "[aria-current='true']",
-    "[aria-selected='true']",
-    ".on",
-    ".active",
-    ".current",
-    ".cur",
-    ".bpx-state-active",
-    ".bpx-player-episode-item-active",
-  ].join(",");
-
-  for (const listSelector of listSelectors) {
-    const list = document.querySelector(listSelector);
-    if (!list) continue;
-    const items = Array.from(list.querySelectorAll<HTMLElement>(itemSelectors));
-    const activeIndex = items.findIndex(item =>
-      item.matches(activeSelector) || Boolean(item.querySelector(activeSelector))
-    );
-    if (activeIndex >= 0) return activeIndex + 1;
-  }
-
+  // OmniStudy 的 part 表示同一个 BV 视频内的分 P。合集/课程和番剧列表中的
+  // 每一项通常是不同视频，必须各自从第 1 集开始，不能把列表位置当成分 P。
   return 1;
 }
 
-/** B 站多 P 列表会随页面版本变化，同时从链接和几种已知列表结构推断总集数。 */
+/** 只统计当前 BV 下的多 P 链接，避免把合集、番剧或推荐列表误算为分 P。 */
 function getTotalParts(): number {
   const current = getCurrentPart();
+  const currentVideoId = location.pathname.match(/\/video\/(BV\w+)/i)?.[1]?.toLowerCase();
+  if (!currentVideoId) return current;
+
   const hrefParts = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href*="p="]'))
     .map(link => {
-      try { return Number(new URL(link.href, location.href).searchParams.get("p")); }
+      try {
+        const url = new URL(link.href, location.href);
+        const linkedVideoId = url.pathname.match(/\/video\/(BV\w+)/i)?.[1]?.toLowerCase();
+        return linkedVideoId === currentVideoId ? Number(url.searchParams.get("p")) : 0;
+      }
       catch { return 0; }
     })
     .filter(part => Number.isInteger(part) && part > 0);
-  const listSizes = [
-    ".multi-page-v1 .list-box li",
-    ".cur-list .list-box li",
-    ".video-pod__list .video-pod__item",
-    ".bpx-player-episode-list .bpx-player-episode-item",
-  ].map(selector => document.querySelectorAll(selector).length);
-  return Math.max(current, ...hrefParts, ...listSizes, 1);
+  return Math.max(current, ...hrefParts, 1);
 }
 
 async function getSessionId(): Promise<string> {

@@ -58,7 +58,7 @@ public class DistributedRateLimitFilter extends OncePerRequestFilter {
         response.setHeader("Retry-After", String.valueOf(decision.retryAfterSeconds()));
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding("UTF-8");
-        objectMapper.writeValue(response.getWriter(), ApiResponse.fail("请求过于频繁，请稍后重试"));
+        objectMapper.writeValue(response.getWriter(), ApiResponse.fail("RATE_LIMITED", "请求过于频繁，请稍后重试"));
     }
 
     private Policy policy(HttpServletRequest request) {

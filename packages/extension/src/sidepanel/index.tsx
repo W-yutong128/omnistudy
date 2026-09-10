@@ -5,7 +5,6 @@ import { AgentPanel } from "./AgentPanel";
 import { AdminPanel } from "./AdminPanel";
 import { AiSettingsPanel } from "./AiSettingsPanel";
 import { InsightsPanel } from "./InsightsPanel";
-import { API_BASE_URL } from "../config";
 import "./styles.css";
 
 interface Message {
@@ -25,8 +24,6 @@ type AuthState = {
   role?: "USER" | "ADMIN";
   expiresAt?: string;
 };
-
-const API_BASE = API_BASE_URL;
 
 export const App: React.FC = () => {
   const [session, setSession] = useState<Session | null>(null);
@@ -150,7 +147,7 @@ export const App: React.FC = () => {
         const payload = msg.payload as { url: string; part?: number; totalParts?: number };
         const newPart = payload.part || extractPartFromUrl(payload.url);
         setCurrentPart(newPart);
-        if (payload.totalParts) setTotalParts(current => Math.max(current, payload.totalParts || 1));
+        setTotalParts(Math.max(newPart, payload.totalParts || 1));
         handleContextReady(payload.url);
         syncCurrentTime();
       }
@@ -241,18 +238,10 @@ export const App: React.FC = () => {
       
       const title = await getVideoTitle();
       // 调用后端创建真实 session
-      const res = await fetch(`${API_BASE}/session/start`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${storedAuth.token}`,
-        },
-        body: JSON.stringify({ videoUrl: url, videoTitle: title || "未知视频" }),
+      const json = await chrome.runtime.sendMessage({
+        type: "session:start",
+        payload: { videoUrl: url, videoTitle: title || "未知视频" },
       });
-
-      if (!res.ok) throw new Error(`创建 session 失败: ${res.status}`);
-
-      const json = await res.json();
       if (!json.success) throw new Error(json.error);
 
       const newSession = normalizeSession(json.data);
@@ -284,7 +273,9 @@ export const App: React.FC = () => {
           setCurrentTime(result.currentTime);
         }
         if (typeof result?.part === "number") setCurrentPart(result.part);
-        if (typeof result?.totalParts === "number") setTotalParts(result.totalParts);
+        if (typeof result?.totalParts === "number") {
+          setTotalParts(Math.max(result.part || 1, result.totalParts));
+        }
       }
     } catch { /* ignore */ }
   };
@@ -303,21 +294,10 @@ export const App: React.FC = () => {
         difficulty: 1,
       });
 
-      const response = await fetch(`${API_BASE}/intercept`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${auth.token}`,
-        },
-        body: JSON.stringify({ ...interceptData, sessionId: session.id }),
+      const result = await chrome.runtime.sendMessage({
+        type: "manual:intercept",
+        payload: { ...interceptData, sessionId: session.id },
       });
-
-      if (!response.ok) {
-        const err = await response.text();
-        throw new Error(`请求失败: ${response.status} ${err}`);
-      }
-
-      const result = await response.json();
       if (result.success) {
         const q = { ...result.data.response, id: result.data.questionId } as InterceptResult;
         const part = q.part ?? interceptData.part ?? currentPart;

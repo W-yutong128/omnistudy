@@ -1,5 +1,28 @@
 import { chromium, expect, test } from "@playwright/test";
+import fs from "node:fs";
 import path from "node:path";
+
+test("keeps authenticated backend access in the service worker", () => {
+  const sidePanelSource = fs.readFileSync(path.resolve(import.meta.dirname, "../src/sidepanel/index.tsx"), "utf8");
+  const workerSource = fs.readFileSync(path.resolve(import.meta.dirname, "../src/serviceworker.ts"), "utf8");
+
+  expect(sidePanelSource).not.toContain("fetch(");
+  expect(sidePanelSource).toContain('type: "session:start"');
+  expect(sidePanelSource).toContain('type: "manual:intercept"');
+  expect(workerSource).toContain('message.type === "session:start"');
+  expect(workerSource).toContain('message.type === "manual:intercept"');
+});
+
+test("removes every listener when rebinding the video element", () => {
+  const source = fs.readFileSync(path.resolve(import.meta.dirname, "../src/content-script/index.ts"), "utf8");
+  const start = source.indexOf("function bindVideoElement");
+  const end = source.indexOf("function ", start + 10);
+  const bindFunction = source.slice(start, end);
+
+  expect(bindFunction).toContain('removeEventListener("timeupdate", onTimeUpdate)');
+  expect(bindFunction).toContain('removeEventListener("pause", onPause)');
+  expect(bindFunction).toContain('removeEventListener("ended", onEnded)');
+});
 
 test("requires authentication before rendering the workspace", async () => {
   const extensionPath = path.resolve(import.meta.dirname, "../dist");
