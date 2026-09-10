@@ -1,6 +1,7 @@
 package com.omnistudy.service;
 
 import com.omnistudy.model.entity.KnowledgePoint;
+import com.omnistudy.model.dto.KnowledgePointResponse;
 import com.omnistudy.repository.KnowledgePointRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -20,8 +21,16 @@ public class KnowledgeService {
         return repository.findByUserIdOrderByLastReviewedDesc(userId);
     }
 
+    public List<KnowledgePointResponse> listResponses(UUID userId) {
+        return listByUser(userId).stream().map(this::toResponse).toList();
+    }
+
     public List<KnowledgePoint> weakPoints(UUID userId) {
         return repository.findWeakPointsByUserId(userId);
+    }
+
+    public List<KnowledgePointResponse> weakPointResponses(UUID userId) {
+        return weakPoints(userId).stream().map(this::toResponse).toList();
     }
 
     public List<KnowledgePoint> weakPointsForSession(UUID userId, UUID sessionId) {
@@ -30,6 +39,10 @@ public class KnowledgeService {
 
     public List<KnowledgePoint> duePoints(UUID userId) {
         return repository.findByUserIdAndNextReviewAtLessThanEqualOrderByNextReviewAtAsc(userId, OffsetDateTime.now());
+    }
+
+    public List<KnowledgePointResponse> duePointResponses(UUID userId) {
+        return duePoints(userId).stream().map(this::toResponse).toList();
     }
 
     /**
@@ -95,5 +108,22 @@ public class KnowledgeService {
 
     private String normalize(String name) {
         return name == null ? "" : name.toLowerCase().replaceAll("[\\s，。；：、,.!?！？:;]+", "").trim();
+    }
+
+    private KnowledgePointResponse toResponse(KnowledgePoint point) {
+        List<String> sources = point.getSources() == null ? List.of()
+                : point.getSources().stream().map(UUID::toString).toList();
+        return new KnowledgePointResponse(
+                point.getId().toString(), point.getName(), point.getNormalizedName(), point.getMastery(),
+                text(point.getFirstSeen()), text(point.getLastReviewed()),
+                point.getMasteryScore() == null ? 0.0 : point.getMasteryScore(),
+                text(point.getNextReviewAt()),
+                point.getReviewIntervalDays() == null ? 1 : point.getReviewIntervalDays(),
+                point.getCorrectStreak() == null ? 0 : point.getCorrectStreak(),
+                sources, sources.size());
+    }
+
+    private String text(OffsetDateTime value) {
+        return value == null ? null : value.toString();
     }
 }

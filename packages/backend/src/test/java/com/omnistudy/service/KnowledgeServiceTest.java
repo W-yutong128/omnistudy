@@ -10,6 +10,8 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class KnowledgeServiceTest {
 
@@ -55,6 +57,30 @@ class KnowledgeServiceTest {
 
         assertThat(service.weakPointsForSession(userId, sessionId)).containsExactly(point);
         org.mockito.Mockito.verify(repository).findWeakPointsByUserIdAndSessionId(userId, sessionId);
+    }
+
+    @Test
+    void publicWeakPointResponseContainsValuesWithoutJpaRelations() {
+        UUID userId = UUID.randomUUID();
+        UUID pointId = UUID.randomUUID();
+        UUID sourceId = UUID.randomUUID();
+        KnowledgePoint point = KnowledgePoint.builder()
+                .id(pointId).userId(userId).name("页表地址转换").normalizedName("页表地址转换")
+                .mastery("模糊的").masteryScore(0.42).reviewIntervalDays(2).correctStreak(1)
+                .firstSeen(OffsetDateTime.now().minusDays(2)).lastReviewed(OffsetDateTime.now())
+                .nextReviewAt(OffsetDateTime.now().plusDays(1)).sources(List.of(sourceId)).build();
+        KnowledgePointRepository repository = mock(KnowledgePointRepository.class);
+        when(repository.findWeakPointsByUserId(userId)).thenReturn(List.of(point));
+
+        var response = new KnowledgeService(repository).weakPointResponses(userId).getFirst();
+
+        assertThat(response.id()).isEqualTo(pointId.toString());
+        assertThat(response.name()).isEqualTo("页表地址转换");
+        assertThat(response.sources()).containsExactly(sourceId.toString());
+        assertThat(response.noteCount()).isEqualTo(1);
+        assertThat(response.getClass().getRecordComponents())
+                .extracting(java.lang.reflect.RecordComponent::getName)
+                .doesNotContain("user", "userId");
     }
 
     private KnowledgeService serviceFor(KnowledgePoint point) {

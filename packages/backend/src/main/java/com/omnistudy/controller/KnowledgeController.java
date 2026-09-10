@@ -1,7 +1,7 @@
 package com.omnistudy.controller;
 
 import com.omnistudy.model.dto.ApiResponse;
-import com.omnistudy.model.entity.KnowledgePoint;
+import com.omnistudy.model.dto.KnowledgePointResponse;
 import com.omnistudy.service.KnowledgeService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -19,23 +19,23 @@ public class KnowledgeController {
     private final KnowledgeService knowledgeService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<KnowledgePoint>>> list(
+    public ResponseEntity<ApiResponse<List<KnowledgePointResponse>>> list(
             @AuthenticationPrincipal UUID userId
     ) {
-        return ResponseEntity.ok(ApiResponse.ok(knowledgeService.listByUser(userId)));
+        return ResponseEntity.ok(ApiResponse.ok(knowledgeService.listResponses(userId)));
     }
 
     @GetMapping("/weak")
-    public ResponseEntity<ApiResponse<List<KnowledgePoint>>> weak(
+    public ResponseEntity<ApiResponse<List<KnowledgePointResponse>>> weak(
             @AuthenticationPrincipal UUID userId
     ) {
-        return ResponseEntity.ok(ApiResponse.ok(knowledgeService.weakPoints(userId)));
+        return ResponseEntity.ok(ApiResponse.ok(knowledgeService.weakPointResponses(userId)));
     }
 
     @GetMapping("/due")
-    public ResponseEntity<ApiResponse<List<KnowledgePoint>>> due(
+    public ResponseEntity<ApiResponse<List<KnowledgePointResponse>>> due(
             @AuthenticationPrincipal UUID userId
     ) {
-        return ResponseEntity.ok(ApiResponse.ok(knowledgeService.duePoints(userId)));
+        return ResponseEntity.ok(ApiResponse.ok(knowledgeService.duePointResponses(userId)));
     }
 }
