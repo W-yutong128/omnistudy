@@ -10,6 +10,8 @@ import java.util.UUID;
 @Repository
 public interface QuestionRepository extends JpaRepository<Question, UUID> {
     List<Question> findBySessionIdOrderByCreatedAtAsc(UUID sessionId);
+    List<Question> findBySessionIdAndOriginOrderByCreatedAtAsc(UUID sessionId, String origin);
     List<Question> findByNoteIdOrderByCreatedAtAsc(UUID noteId);
     int countBySessionId(UUID sessionId);
+    int countBySessionIdAndOrigin(UUID sessionId, String origin);
 }

@@ -6,8 +6,16 @@ type ChatMessage = { role: "user" | "assistant"; text: string; result?: AgentRes
 
 interface Props {
   sessionId?: string;
+  userId?: string;
   authenticated: boolean;
 }
+
+const welcomeMessage: ChatMessage = {
+  role: "assistant",
+  text: "我能结合当前视频解释知识点、搜索笔记、生成练习，并帮你定位到讲解位置。",
+};
+
+const MAX_STORED_MESSAGES = 50;
 
 const suggestions = [
   "解释一下当前内容",
@@ -16,19 +24,44 @@ const suggestions = [
   "刚才这个概念是在哪里讲的？",
 ];
 
-export function AgentPanel({ sessionId, authenticated }: Props) {
-  const [messages, setMessages] = useState<ChatMessage[]>([{
-    role: "assistant",
-    text: "我能结合当前视频解释知识点、搜索笔记、生成练习，并帮你定位到讲解位置。",
-  }]);
+export function AgentPanel({ sessionId, userId, authenticated }: Props) {
+  const [messages, setMessages] = useState<ChatMessage[]>([welcomeMessage]);
+  const [loadedHistoryKey, setLoadedHistoryKey] = useState<string>();
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [ideaProjectPath, setIdeaProjectPath] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
+  const historyKey = sessionId && userId ? `agentChat:${userId}:${sessionId}` : undefined;
 
   useEffect(() => {
     void chrome.storage.local.get("ideaProjectPath").then(value => setIdeaProjectPath(value.ideaProjectPath || ""));
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadedHistoryKey(undefined);
+    if (!historyKey) {
+      setMessages([welcomeMessage]);
+      return () => { cancelled = true; };
+    }
+
+    void chrome.storage.local.get(historyKey).then(value => {
+      if (cancelled) return;
+      const stored = value[historyKey];
+      const restored = Array.isArray(stored)
+        ? stored.filter((message): message is ChatMessage =>
+            !!message && (message.role === "user" || message.role === "assistant") && typeof message.text === "string")
+        : [];
+      setMessages(restored.length ? restored : [welcomeMessage]);
+      setLoadedHistoryKey(historyKey);
+    });
+    return () => { cancelled = true; };
+  }, [historyKey]);
+
+  useEffect(() => {
+    if (!historyKey || loadedHistoryKey !== historyKey) return;
+    void chrome.storage.local.set({ [historyKey]: messages.slice(-MAX_STORED_MESSAGES) });
+  }, [historyKey, loadedHistoryKey, messages]);
 
   async function openIdea(result: AgentResult) {
     if (!result.ideHandoff) return;

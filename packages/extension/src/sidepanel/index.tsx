@@ -75,11 +75,10 @@ export const App: React.FC = () => {
           setSession(restored);
           await chrome.storage.local.set({ sessionId: restored.id });
           if (authResult.auth) {
-            const restoredQuestions = await loadCourseQuestions(
-              restored.videoUrl,
-              restored.id,
-              authResult.auth.token,
-            );
+            // 当前版本在同一 BV 的分 P 间复用一个 session，因此恢复当前
+            // session 就能拿到本次学习的全部分集问题。不要按 BV 合并历史
+            // session，否则旧数据缺少准确 part 时会全部落到第 1 集。
+            const restoredQuestions = await loadQuestions(restored.id);
             // 按分P分组
             const grouped = groupQuestionsByPart(restoredQuestions);
             setQuestionsByPart(grouped);
@@ -423,7 +422,7 @@ export const App: React.FC = () => {
     }
     setDeleteResolvingIndex(index);
     try {
-      const refreshed = await loadCourseQuestions(session.videoUrl, session.id, auth.token);
+      const refreshed = await loadQuestions(session.id);
       const grouped = groupQuestionsByPart(refreshed);
       setQuestionsByPart(grouped);
       setSession(current => current ? { ...current, questionCount: refreshed.length } : current);
@@ -536,7 +535,7 @@ export const App: React.FC = () => {
       ) : activeSection === "insights" ? (
         <InsightsPanel sessionId={session?.id} refreshKey={noteRefreshKey} />
       ) : activeSection === "agent" ? (
-        <AgentPanel sessionId={session?.id} authenticated={!!auth} />
+        <AgentPanel sessionId={session?.id} userId={auth?.userId} authenticated={!!auth} />
       ) : activeSection === "notes" ? (
         <NotePanel note={session?.note ?? null} onGenerate={syncNoteNow} sessionActive={!!session && !!auth}
           refreshKey={noteRefreshKey} syncStatus={noteSyncStatus} syncMessage={noteSyncMessage} />
@@ -710,7 +709,7 @@ function normalizeSession(raw: BackendSession): Session {
   };
 }
 
-async function loadQuestions(sessionId: string, _token: string) {
+async function loadQuestions(sessionId: string) {
   try {
     const result = await chrome.runtime.sendMessage({
       type: "question:list-session", payload: { sessionId },
@@ -735,41 +734,6 @@ async function loadQuestions(sessionId: string, _token: string) {
     console.error("加载问题记录失败:", e);
   }
   return [] as InterceptResult[];
-}
-
-/**
- * 兼容旧版本切分P时误建多个 session 的数据：同一个 BV 号下的题目
- * 合并到一份前端视图中。修复后的新数据仍会一直使用同一个 session。
- */
-async function loadCourseQuestions(videoUrl: string, currentSessionId: string, token: string) {
-  const courseId = extractCourseId(videoUrl);
-  const sessionIds = new Set<string>([currentSessionId]);
-
-  if (courseId) {
-    try {
-      const result = await chrome.runtime.sendMessage({ type: "session:list" });
-      if (result?.success && Array.isArray(result.data)) {
-        for (const candidate of result.data as BackendSession[]) {
-          if (candidate.id && extractCourseId(candidate.videoUrl || "") === courseId) {
-            sessionIds.add(candidate.id);
-          }
-        }
-      }
-    } catch (e) {
-      console.error("加载课程会话失败:", e);
-    }
-  }
-
-  const batches = await Promise.all(
-    [...sessionIds].map((sessionId) => loadQuestions(sessionId, token)),
-  );
-  const seen = new Set<string>();
-  return batches.flat().filter((question) => {
-    const key = question.id || `${question.part}:${question.time}:${question.question}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
 }
 
 // 按分P分组

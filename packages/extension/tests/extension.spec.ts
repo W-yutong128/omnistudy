@@ -24,6 +24,22 @@ test("removes every listener when rebinding the video element", () => {
   expect(bindFunction).toContain('removeEventListener("ended", onEnded)');
 });
 
+test("persists Agent chat history per user and learning session", () => {
+  const source = fs.readFileSync(path.resolve(import.meta.dirname, "../src/sidepanel/AgentPanel.tsx"), "utf8");
+
+  expect(source).toContain("`agentChat:${userId}:${sessionId}`");
+  expect(source).toContain("chrome.storage.local.get(historyKey)");
+  expect(source).toContain("chrome.storage.local.set({ [historyKey]");
+});
+
+test("restores questions from only the active learning session", () => {
+  const source = fs.readFileSync(path.resolve(import.meta.dirname, "../src/sidepanel/index.tsx"), "utf8");
+
+  expect(source).toContain("await loadQuestions(restored.id)");
+  expect(source).not.toContain("loadCourseQuestions");
+  expect(source).not.toContain('type: "session:list"');
+});
+
 test("requires authentication before rendering the workspace", async () => {
   const extensionPath = path.resolve(import.meta.dirname, "../dist");
   const context = await chromium.launchPersistentContext("", {

@@ -70,7 +70,7 @@ public class SessionService {
                 session.getVideoTitle(),
                 session.getStartedAt() == null ? null : session.getStartedAt().toString(),
                 session.getEndedAt() == null ? null : session.getEndedAt().toString(),
-                questionRepository.countBySessionId(session.getId())
+                questionRepository.countBySessionIdAndOrigin(session.getId(), "course_intercept")
         );
     }
 }

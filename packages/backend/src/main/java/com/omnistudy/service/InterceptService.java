@@ -202,7 +202,7 @@ public class InterceptService {
             throw new IllegalArgumentException("无权访问该 session");
         }
 
-        return questionRepository.findBySessionIdOrderByCreatedAtAsc(sessionId).stream()
+        return questionRepository.findBySessionIdAndOriginOrderByCreatedAtAsc(sessionId, "course_intercept").stream()
                 .map(q -> new StoredQuestion(
                         q.getId(),
                         formatTime(q.getT()),
