@@ -1,4 +1,4 @@
 interface:
-  display_name: "Coding Course Coach"
-  short_description: "Guide coding practice without replacing the learner"
-  default_prompt: "Use $coding-course-coach to help me practice this coding concept."
+  display_name: "编程课程教练"
+  short_description: "通过诊断与渐进提示辅导编程练习并支持 IDEA 交接"
+  default_prompt: "使用 $coding-course-coach 帮我练习当前编程概念。"

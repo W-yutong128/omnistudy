@@ -1,4 +1,4 @@
 interface:
-  display_name: "Review Coach"
-  short_description: "Plan evidence-based review from learning history"
-  default_prompt: "Use $review-coach to plan my next focused review."
+  display_name: "复习教练"
+  short_description: "根据薄弱点、到期时间与答题记录安排针对性复习"
+  default_prompt: "使用 $review-coach 为我安排下一轮针对性复习。"

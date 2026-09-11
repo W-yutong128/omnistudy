@@ -1,4 +1,4 @@
 interface:
-  display_name: "Current Course Tutor"
-  short_description: "Explain the current lesson with grounded citations"
-  default_prompt: "Use $current-course-tutor to explain what I am watching now."
+  display_name: "当前课程导师"
+  short_description: "结合当前视频字幕、画面与学习记忆进行有来源的讲解"
+  default_prompt: "使用 $current-course-tutor 解释我正在观看的课程内容。"
